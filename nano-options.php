@@ -124,9 +124,11 @@ class NanoOptions {
 	 *     @type string $id          Field ID.
 	 *     @type string $title       Field title.
 	 *     @type string $section_id  Section ID to add field to.
-	 *     @type string $type        Field type (default: text).
-	 *     @type array  $args        Field type specific arguments.
-	 * }
+ 	 *     @type string $type        Field type (default: text).
+	 *     @type mixed  $default     Default value.
+ 	 *     @type string $description Field description.
+ 	 *     @type array  $attributes  HTML attributes.
+ 	 * }
 	 */
 	public static function field( array $args ) {
 		if ( is_admin() ) {
@@ -156,9 +158,8 @@ function nano_options_init() {
 		'title'       => 'Site Title',
 		'section_id'  => 'general',
 		'type'        => 'text',
-		'args'        => [
-			'description' => 'Enter the title of your site.',
-		]
+		'default'     => '',
+		'description' => 'Enter the title of your site.',
 	]);
 	
 	NanoOptions::field([
@@ -166,9 +167,8 @@ function nano_options_init() {
 		'title'       => 'Tagline',
 		'section_id'  => 'general',
 		'type'        => 'text',
-		'args'        => [
-			'description' => "In a few words, explain what this site is about.",
-		]
+		'default'     => '',
+		'description' => "In a few words, explain what this site is about.",
 	]);
 }
 add_action( 'plugins_loaded', 'nano_options_init' );

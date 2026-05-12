@@ -85,29 +85,46 @@ class NanoOptions_Framework {
 	}
 
 	/**
-	 * Register a field.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param array $args {
-	 *     Array of field arguments.
-	 *
-	 *     @type string $id          Field ID.
-	 *     @type string $title       Field title.
-	 *     @type string $section_id  Section ID to add field to.
-	 *     @type string $type        Field type (default: text).
-	 *     @type array  $args        Field type specific arguments.
-	 * }
-	 */
-	public static function field( array $args ) {
-		self::$fields[] = wp_parse_args( $args, array(
-			'id'          => '',
-			'title'       => '',
-			'section_id'  => '',
-			'type'        => 'text',
-			'args'        => array(),
-		) );
-	}
+ 	 * Register a field.
+ 	 *
+ 	 * @since 1.0.0
+ 	 *
+ 	 * @param array $args {
+ 	 *     Array of field arguments.
+ 	 *
+ 	 *     @type string $id          Field ID.
+ 	 *     @type string $title       Field title.
+ 	 *     @type string $section_id  Section ID to add field to.
+ 	 *     @type string $type        Field type (default: text).
+ 	 *     @type mixed  $default     Default value.
+ 	 *     @type string $description Field description.
+ 	 *     @type array  $attributes  HTML attributes.
+ 	 * }
+ 	 */
+ 	public static function field( array $args ) {
+ 		// Extract special parameters that go into field args.
+ 		$field_args = array();
+ 		if ( isset( $args['default'] ) ) {
+ 			$field_args['default'] = $args['default'];
+ 			unset( $args['default'] );
+ 		}
+ 		if ( isset( $args['description'] ) ) {
+ 			$field_args['description'] = $args['description'];
+ 			unset( $args['description'] );
+ 		}
+ 		if ( isset( $args['attributes'] ) ) {
+ 			$field_args['attributes'] = $args['attributes'];
+ 			unset( $args['attributes'] );
+ 		}
+ 		
+ 		self::$fields[] = wp_parse_args( $args, array(
+ 			'id'          => '',
+ 			'title'       => '',
+ 			'section_id'  => '',
+ 			'type'        => 'text',
+ 			'args'        => $field_args,
+ 		) );
+ 	}
 
 	/**
 	 * Include all field types.
@@ -122,42 +139,47 @@ class NanoOptions_Framework {
 	}
 
 	/**
-	 * Render a field.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param array $field Field data.
-	 * @return void
-	 */
-	private static function render_field( $field ) {
-		$field_id   = $field['id'];
-		$field_type = $field['type'];
-		$field_args = $field['args'];
-		
-		// Get current value.
-		$options = get_option( self::$config['option_name'] );
-		$value   = isset( $options[ $field_id ] ) ? $options[ $field_id ] : '';
-		
-		// Prepare field arguments for renderer.
-		$renderer_args = array(
-			'id'    => $field_id,
-			'name'  => self::$config['option_name'] . '[' . $field_id . ']',
-			'title' => $field['title'],
-		);
-		
-		if ( ! empty( $field_args ) && is_array( $field_args ) ) {
-			$renderer_args = array_merge( $renderer_args, $field_args );
-		}
-		
-		// Call the field type renderer.
-		$renderer_class = 'NanoOptions_Field_' . ucfirst( strtolower( $field_type ) );
-		if ( class_exists( $renderer_class ) && method_exists( $renderer_class, 'render' ) ) {
-			call_user_func( array( $renderer_class, 'render' ), $renderer_args, $value );
-		} else {
-			// Fallback to text field.
-			NanoOptions_Field_Text::render( $renderer_args, $value );
-		}
-	}
+ 	 * Render a field.
+ 	 *
+ 	 * @since 1.0.0
+ 	 *
+ 	 * @param array $field Field data.
+ 	 * @return void
+ 	 */
+ 	private static function render_field( $field ) {
+ 		$field_id   = $field['id'];
+ 		$field_type = $field['type'];
+ 		$field_args = $field['args'];
+ 		
+ 		// Get current value.
+ 		$options = get_option( self::$config['option_name'] );
+ 		if ( isset( $options[ $field_id ] ) ) {
+ 			$value = $options[ $field_id ];
+ 		} else {
+ 			// Use default value if provided, otherwise empty string.
+ 			$value = isset( $field_args['default'] ) ? $field_args['default'] : '';
+ 		}
+ 		
+ 		// Prepare field arguments for renderer.
+ 		$renderer_args = array(
+ 			'id'    => $field_id,
+ 			'name'  => self::$config['option_name'] . '[' . $field_id . ']',
+ 			'title' => $field['title'],
+ 		);
+ 		
+ 		if ( ! empty( $field_args ) && is_array( $field_args ) ) {
+ 			$renderer_args = array_merge( $renderer_args, $field_args );
+ 		}
+ 		
+ 		// Call the field type renderer.
+ 		$renderer_class = 'NanoOptions_Field_' . ucfirst( strtolower( $field_type ) );
+ 		if ( class_exists( $renderer_class ) && method_exists( $renderer_class, 'render' ) ) {
+ 			call_user_func( array( $renderer_class, 'render' ), $renderer_args, $value );
+ 		} else {
+ 			// Fallback to text field.
+ 			NanoOptions_Field_Text::render( $renderer_args, $value );
+ 		}
+ 	}
 
 	/**
 	 * Register admin menu.
