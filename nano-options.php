@@ -93,4 +93,39 @@ class NanoOptions {
 	public function get_config() {
 		return $this->config;
 	}
+
+	/**
+	 * Register a section.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param array $args {
+	 *     Array of section arguments.
+	 *
+	 *     @type string $id    Section ID.
+	 *     @type string $title Section title.
+	 * }
+	 */
+	public static function section( array $args ) {
+		if ( is_admin() ) {
+			require_once plugin_dir_path( __FILE__ ) . 'framework/framework.php';
+			NanoOptions_Framework::section( $args );
+		}
+	}
 }
+
+// Initialize the plugin with sample configuration and section.
+function nano_options_init() {
+	$instance = NanoOptions::init([
+		'menu_title' => 'Settings',
+		'menu_slug'  => 'nano-options',
+		'option_name'=> 'nano_options',
+	]);
+	
+	// Register a sample section.
+	NanoOptions::section([
+		'id'    => 'general',
+		'title' => 'General Settings',
+	]);
+}
+add_action( 'plugins_loaded', 'nano_options_init' );

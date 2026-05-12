@@ -17,6 +17,14 @@ class NanoOptions_Framework {
 	private static $config = array();
 
 	/**
+	 * Registered sections.
+	 *
+	 * @since 1.0.0
+	 * @var array
+	 */
+	private static $sections = array();
+
+	/**
 	 * Initialize the framework.
 	 *
 	 * @since 1.0.0
@@ -47,6 +55,25 @@ class NanoOptions_Framework {
 
 		// Enqueue admin assets.
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
+	}
+
+	/**
+	 * Register a section.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param array $args {
+	 *     Array of section arguments.
+	 *
+	 *     @type string $id    Section ID.
+	 *     @type string $title Section title.
+	 * }
+	 */
+	public static function section( array $args ) {
+		self::$sections[] = wp_parse_args( $args, array(
+			'id'   => '',
+			'title'=> '',
+		) );
 	}
 
 	/**
@@ -85,41 +112,20 @@ class NanoOptions_Framework {
 			array( __CLASS__, 'sanitize_options' ) // Sanitize callback.
 		);
 
-		// Add a section.
-		add_settings_section(
-			'nano_options_main_section', // ID.
-			__( 'Main Settings', 'nano-options' ), // Title.
-			array( __CLASS__, 'section_description' ), // Callback.
-			self::$config['menu_slug'] // Page.
-		);
+		// Register each section.
+		foreach ( self::$sections as $section ) {
+			// Skip if ID or title is empty.
+			if ( empty( $section['id'] ) || empty( $section['title'] ) ) {
+				continue;
+			}
 
-		// Add a sample field.
-		add_settings_field(
-			'nano_options_sample_text', // ID.
-			__( 'Sample Text Field', 'nano-options' ), // Title.
-			array( __CLASS__, 'sample_text_field_callback' ), // Callback.
-			self::$config['menu_slug'], // Page.
-			'nano_options_main_section' // Section.
-		);
-	}
-
-	/**
-	 * Section description callback.
-	 */
-	public static function section_description() {
-		echo '<p>' . __( 'These are the main settings for the NanoOptions plugin.', 'nano-options' ) . '</p>';
-	}
-
-	/**
-	 * Sample text field callback.
-	 */
-	public static function sample_text_field_callback() {
-		$options = get_option( self::$config['option_name'] );
-		$value   = isset( $options['sample_text'] ) ? esc_attr( $options['sample_text'] ) : '';
-		?>
-		<input type="text" name="<?php echo esc_attr( self::$config['option_name'] ); ?>[sample_text]" value="<?php echo $value; ?>" class="regular-text" />
-		<p class="description"><?php _e( 'Enter a sample text value.', 'nano-options' ); ?></p>
-		<?php
+			add_settings_section(
+				$section['id'],
+				$section['title'],
+				'__return_false', // No section description.
+				self::$config['menu_slug']
+			);
+		}
 	}
 
 	/**
@@ -129,11 +135,10 @@ class NanoOptions_Framework {
 	 * @return array Sanitized option array.
 	 */
 	public static function sanitize_options( $input ) {
-		$sanitized = array();
-		if ( isset( $input['sample_text'] ) ) {
-			$sanitized['sample_text'] = sanitize_text_field( $input['sample_text'] );
+		if ( ! is_array( $input ) ) {
+			return array();
 		}
-		return $sanitized;
+		return $input;
 	}
 
 	/**
