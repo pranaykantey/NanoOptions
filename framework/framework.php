@@ -25,6 +25,14 @@ class NanoOptions_Framework {
 	private static $sections = array();
 
 	/**
+	 * Registered fields.
+	 *
+	 * @since 1.0.0
+	 * @var array
+	 */
+	private static $fields = array();
+
+	/**
 	 * Initialize the framework.
 	 *
 	 * @since 1.0.0
@@ -77,6 +85,31 @@ class NanoOptions_Framework {
 	}
 
 	/**
+	 * Register a field.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param array $args {
+	 *     Array of field arguments.
+	 *
+	 *     @type string $id          Field ID.
+	 *     @type string $title       Field title.
+	 *     @type string $section_id  Section ID to add field to.
+	 *     @type string $type        Field type (default: text).
+	 *     @type array  $args        Field type specific arguments.
+	 * }
+	 */
+	public static function field( array $args ) {
+		self::$fields[] = wp_parse_args( $args, array(
+			'id'          => '',
+			'title'       => '',
+			'section_id'  => '',
+			'type'        => 'text',
+			'args'        => array(),
+		) );
+	}
+
+	/**
 	 * Include all field types.
 	 */
 	private static function include_fields() {
@@ -85,6 +118,44 @@ class NanoOptions_Framework {
 			foreach ( glob( $fields_dir . '/*.php' ) as $field_file ) {
 				require_once $field_file;
 			}
+		}
+	}
+
+	/**
+	 * Render a field.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param array $field Field data.
+	 * @return void
+	 */
+	private static function render_field( $field ) {
+		$field_id   = $field['id'];
+		$field_type = $field['type'];
+		$field_args = $field['args'];
+		
+		// Get current value.
+		$options = get_option( self::$config['option_name'] );
+		$value   = isset( $options[ $field_id ] ) ? $options[ $field_id ] : '';
+		
+		// Prepare field arguments for renderer.
+		$renderer_args = array(
+			'id'    => $field_id,
+			'name'  => self::$config['option_name'] . '[' . $field_id . ']',
+			'title' => $field['title'],
+		);
+		
+		if ( ! empty( $field_args ) && is_array( $field_args ) ) {
+			$renderer_args = array_merge( $renderer_args, $field_args );
+		}
+		
+		// Call the field type renderer.
+		$renderer_class = 'NanoOptions_Field_' . ucfirst( strtolower( $field_type ) );
+		if ( class_exists( $renderer_class ) && method_exists( $renderer_class, 'render' ) ) {
+			call_user_func( array( $renderer_class, 'render' ), $renderer_args, $value );
+		} else {
+			// Fallback to text field.
+			NanoOptions_Field_Text::render( $renderer_args, $value );
 		}
 	}
 
@@ -125,6 +196,37 @@ class NanoOptions_Framework {
 				'__return_false', // No section description.
 				self::$config['menu_slug']
 			);
+		}
+
+		// Register each field.
+		foreach ( self::$fields as $field ) {
+			// Skip if required data is missing.
+			if ( empty( $field['id'] ) || empty( $field['title'] ) || empty( $field['section_id'] ) ) {
+				continue;
+			}
+
+			add_settings_field(
+				$field['id'],
+				$field['title'],
+				array( __CLASS__, 'render_field_callback' ),
+				self::$config['menu_slug'],
+				$field['section_id']
+			);
+		}
+	}
+
+	/**
+	 * Field rendering callback for Settings API.
+	 */
+	public static function render_field_callback( $args ) {
+		// Find the field by ID.
+		$field_id = $args['args'][0]; // The field ID is passed as first argument in $args['args']
+		
+		foreach ( self::$fields as $field ) {
+			if ( $field['id'] === $field_id ) {
+				self::render_field( $field );
+				break;
+			}
 		}
 	}
 

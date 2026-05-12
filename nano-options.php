@@ -112,9 +112,31 @@ class NanoOptions {
 			NanoOptions_Framework::section( $args );
 		}
 	}
+
+	/**
+	 * Register a field.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param array $args {
+	 *     Array of field arguments.
+	 *
+	 *     @type string $id          Field ID.
+	 *     @type string $title       Field title.
+	 *     @type string $section_id  Section ID to add field to.
+	 *     @type string $type        Field type (default: text).
+	 *     @type array  $args        Field type specific arguments.
+	 * }
+	 */
+	public static function field( array $args ) {
+		if ( is_admin() ) {
+			require_once plugin_dir_path( __FILE__ ) . 'framework/framework.php';
+			NanoOptions_Framework::field( $args );
+		}
+	}
 }
 
-// Initialize the plugin with sample configuration and section.
+// Initialize the plugin with sample configuration.
 function nano_options_init() {
 	$instance = NanoOptions::init([
 		'menu_title' => 'Settings',
@@ -126,6 +148,27 @@ function nano_options_init() {
 	NanoOptions::section([
 		'id'    => 'general',
 		'title' => 'General Settings',
+	]);
+	
+	// Register sample fields.
+	NanoOptions::field([
+		'id'          => 'site_title',
+		'title'       => 'Site Title',
+		'section_id'  => 'general',
+		'type'        => 'text',
+		'args'        => [
+			'description' => 'Enter the title of your site.',
+		]
+	]);
+	
+	NanoOptions::field([
+		'id'          => 'tagline',
+		'title'       => 'Tagline',
+		'section_id'  => 'general',
+		'type'        => 'text',
+		'args'        => [
+			'description' => "In a few words, explain what this site is about.",
+		]
 	]);
 }
 add_action( 'plugins_loaded', 'nano_options_init' );
