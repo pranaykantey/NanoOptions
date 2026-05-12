@@ -170,5 +170,21 @@ function nano_options_init() {
 		'default'     => '',
 		'description' => "In a few words, explain what this site is about.",
 	]);
+	
+	NanoOptions::field([
+		'id'          => 'site_mode',
+		'title'       => 'Site Mode',
+		'section_id'  => 'general',
+		'type'        => 'select',
+		'default'     => 'production',
+		'description' => 'Select the site mode.',
+		'args'        => [
+			'options' => [
+				'development' => 'Development',
+				'staging'     => 'Staging',
+				'production'  => 'Production',
+			]
+		]
+	]);
 }
 add_action( 'plugins_loaded', 'nano_options_init' );
