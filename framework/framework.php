@@ -42,6 +42,9 @@ class NanoOptions_Framework {
 		// Register admin menu.
 		add_action( 'admin_menu', array( __CLASS__, 'register_admin_menu' ) );
 
+		// Register settings.
+		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
+
 		// Enqueue admin assets.
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
 	}
@@ -72,6 +75,68 @@ class NanoOptions_Framework {
 	}
 
 	/**
+	 * Register settings using the Settings API.
+	 */
+	public static function register_settings() {
+		// Register a setting.
+		register_setting(
+			self::$config['option_name'], // Option group.
+			self::$config['option_name'], // Option name.
+			array( __CLASS__, 'sanitize_options' ) // Sanitize callback.
+		);
+
+		// Add a section.
+		add_settings_section(
+			'nano_options_main_section', // ID.
+			__( 'Main Settings', 'nano-options' ), // Title.
+			array( __CLASS__, 'section_description' ), // Callback.
+			self::$config['menu_slug'] // Page.
+		);
+
+		// Add a sample field.
+		add_settings_field(
+			'nano_options_sample_text', // ID.
+			__( 'Sample Text Field', 'nano-options' ), // Title.
+			array( __CLASS__, 'sample_text_field_callback' ), // Callback.
+			self::$config['menu_slug'], // Page.
+			'nano_options_main_section' // Section.
+		);
+	}
+
+	/**
+	 * Section description callback.
+	 */
+	public static function section_description() {
+		echo '<p>' . __( 'These are the main settings for the NanoOptions plugin.', 'nano-options' ) . '</p>';
+	}
+
+	/**
+	 * Sample text field callback.
+	 */
+	public static function sample_text_field_callback() {
+		$options = get_option( self::$config['option_name'] );
+		$value   = isset( $options['sample_text'] ) ? esc_attr( $options['sample_text'] ) : '';
+		?>
+		<input type="text" name="<?php echo esc_attr( self::$config['option_name'] ); ?>[sample_text]" value="<?php echo $value; ?>" class="regular-text" />
+		<p class="description"><?php _e( 'Enter a sample text value.', 'nano-options' ); ?></p>
+		<?php
+	}
+
+	/**
+	 * Sanitize options.
+	 *
+	 * @param array $input Option array.
+	 * @return array Sanitized option array.
+	 */
+	public static function sanitize_options( $input ) {
+		$sanitized = array();
+		if ( isset( $input['sample_text'] ) ) {
+			$sanitized['sample_text'] = sanitize_text_field( $input['sample_text'] );
+		}
+		return $sanitized;
+	}
+
+	/**
 	 * Admin page HTML.
 	 */
 	public static function admin_page_html() {
@@ -80,30 +145,22 @@ class NanoOptions_Framework {
 			return;
 		}
 
-		// Handle form submission.
-		if ( isset( $_POST['nano_options_nonce'] ) && wp_verify_nonce( $_POST['nano_options_nonce'], 'nano_options_update' ) ) {
-			if ( isset( $_POST['nano_options'] ) ) {
-				$options = sanitize_text_field( wp_unslash( $_POST['nano_options'] ) );
-				update_option( self::$config['option_name'], $options );
-			}
+		// Settings saved notice.
+		if ( isset( $_GET['settings-updated'] ) ) {
+			add_settings_error( self::$config['option_name'], 'nano_options_message', __( 'Settings saved.', 'nano-options' ), 'updated' );
 		}
 
-		$option_value = get_option( self::$config['option_name'], '' );
+		// Show settings errors.
+		settings_errors( self::$config['option_name'] );
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( self::$config['menu_title'] ); ?></h1>
-			<form method="post">
-				<?php wp_nonce_field( 'nano_options_update', 'nano_options_nonce' ); ?>
-				<table class="form-table">
-					<tr valign="top">
-						<th scope="row">Sample Option</th>
-						<td>
-							<input type="text" name="nano_options" value="<?php echo esc_attr( $option_value ); ?>" class="regular-text" />
-							<p class="description">Enter a sample option value.</p>
-						</td>
-					</tr>
-				</table>
-				<?php submit_button(); ?>
+			<form method="post" action="options.php">
+				<?php
+				settings_fields( self::$config['option_name'] );
+				do_settings_sections( self::$config['menu_slug'] );
+				submit_button();
+				?>
 			</form>
 		</div>
 		<?php
