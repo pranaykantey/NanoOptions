@@ -31,7 +31,7 @@ class NanoOptions_Framework {
 	/** @var bool Debug mode */
 	private static $debug = false;
 
-	/** @var array Messages (debug/errors) */
+	/** @var array Debug messages */
 	private static $messages = [];
 
 	/**
@@ -64,7 +64,7 @@ class NanoOptions_Framework {
 	}
 
 	/**
-	 * Include all field files.
+	 * Include all field type files.
 	 */
 	private static function include_fields() {
 		$dir = plugin_dir_path( __FILE__ ) . 'fields/';
@@ -76,9 +76,15 @@ class NanoOptions_Framework {
 	}
 
 	/**
-	 * Register a section.
+	 * Register a settings section.
 	 *
-	 * @param array $args
+	 * @param array $args {
+	 *     @type string $id          Required.
+	 *     @type string $title       Required.
+	 *     @type string $tab         Tab name. Default 'Main'.
+	 *     @type string $description Optional description.
+	 *     @type callable $callback  Optional custom callback.
+	 * }
 	 */
 	public static function section( array $args ) {
 		$defaults = [
@@ -109,9 +115,14 @@ class NanoOptions_Framework {
 	/**
 	 * Register a field.
 	 *
-	 * @param array $args
+	 * @param array $args Field arguments.
 	 */
 	public static function field( array $args ) {
+		// Support both 'section' (user-friendly) and 'section_id' (internal).
+		if ( isset( $args['section'] ) && empty( $args['section_id'] ) ) {
+			$args['section_id'] = $args['section'];
+		}
+
 		$defaults = [
 			'id'          => '',
 			'title'       => '',
@@ -149,7 +160,7 @@ class NanoOptions_Framework {
 			}
 		}
 
-		// Asset flags
+		// Asset flags based on field type and conditionals
 		switch ( $field['type'] ) {
 			case 'media':
 				self::$needs_media = true;
@@ -185,7 +196,7 @@ class NanoOptions_Framework {
 	}
 
 	/**
-	 * Register setting only – we render fields manually.
+	 * Register setting only – fields rendered manually.
 	 */
 	public static function register_settings() {
 		register_setting(
@@ -243,7 +254,7 @@ class NanoOptions_Framework {
 		}
 
 		?>
-		<tr class="nanooptions-field-row <?php echo esc_attr( $field['class'] ?? '' ); ?>"<?php echo $condition_attr; // escaped via esc_attr above ?>>
+		<tr class="nanooptions-field-row <?php echo esc_attr( $field['class'] ?? '' ); ?>"<?php echo $condition_attr; ?>>
 			<th scope="row">
 				<label for="<?php echo esc_attr( $field['id'] ); ?>">
 					<?php echo esc_html( $field['title'] ); ?>
@@ -294,7 +305,7 @@ class NanoOptions_Framework {
 				<?php
 				settings_fields( self::$config['option_name'] );
 
-				// Build tabs list
+				// Build tabs list from sections
 				$tabs = [];
 				foreach ( self::$sections as $section ) {
 					$tab = $section['tab'] ?? 'Main';
@@ -328,12 +339,12 @@ class NanoOptions_Framework {
 						<th scope="row"><?php esc_html_e( 'Import/Export Settings', 'nano-options' ); ?></th>
 						<td>
 							<p>
-								<input type="submit" name="nano_options_export" class="button button-secondary" value="<?php esc_attr_e( 'Export', 'nano-options' ); ?>" />
+								<input type="submit" name="nano_options_export" class="button button-secondary" value="<?php esc_attr_e( 'Export Settings', 'nano-options' ); ?>" />
 								<?php wp_nonce_field( 'nano_options_export', 'nano_options_export_nonce' ); ?>
 							</p>
 							<p>
 								<input type="file" name="nano_options_import_file" id="nano_options_import_file" accept=".json" />
-								<input type="submit" name="nano_options_import" class="button button-secondary" value="<?php esc_attr_e( 'Import', 'nano-options' ); ?>" />
+								<input type="submit" name="nano_options_import" class="button button-secondary" value="<?php esc_attr_e( 'Import Settings', 'nano-options' ); ?>" />
 								<?php wp_nonce_field( 'nano_options_import', 'nano_options_import_nonce' ); ?>
 								<p class="description"><?php esc_html_e( 'Upload a previously exported JSON file.', 'nano-options' ); ?></p>
 							</p>
@@ -535,7 +546,8 @@ class NanoOptions_Framework {
 
 	public static function enqueue_assets() {
 		$screen = get_current_screen();
-		if ( ! $screen || $screen->id !== self::$config['menu_slug'] ) {
+		// Options pages use hook 'settings_page_{menu_slug}'
+		if ( ! $screen || $screen->id !== 'settings_page_' . self::$config['menu_slug'] ) {
 			return;
 		}
 
@@ -548,6 +560,7 @@ class NanoOptions_Framework {
 			'1.0.0'
 		);
 
+		// Conditionally enqueue WordPress core assets
 		if ( self::$needs_media ) {
 			wp_enqueue_media();
 		}
