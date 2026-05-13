@@ -461,10 +461,10 @@ class NanoOptions_Framework {
 			case 'checkbox':
 				return ! empty( $value ) ? 1 : 0;
 
-			case 'select':
-			case 'radio':
-				$allowed = $field['options'] ?? [];
-				return in_array( $value, $allowed, true ) ? $value : '';
+		case 'select':
+		case 'radio':
+			$allowed = $field['options'] ?? ($field['args']['options'] ?? []);
+			return in_array( $value, $allowed, true ) ? $value : '';
 
 			case 'number':
 				if ( ! empty( $field['integer'] ) ) {

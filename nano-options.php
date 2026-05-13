@@ -191,9 +191,9 @@ class NanoOptions {
 // Initialize the plugin with sample configuration.
 function nano_options_init() {
 	$instance = NanoOptions::init([
-		'menu_title' => 'Settings',
-		'menu_slug'  => 'nano-options',
-		'option_name'=> 'nano_options',
+		'menu_title' => 'NanoOptions Demo',
+		'menu_slug'  => 'nano-options-demo',
+		'option_name'=> 'nano_options_demo',
 	]);
 	
 	// Register sample sections with tabs.
