@@ -195,5 +195,14 @@ function nano_options_init() {
 		'default'     => '#0073aa',
 		'description' => 'Choose an accent color for your site.',
 	]);
+	
+	NanoOptions::field([
+		'id'          => 'logo_image',
+		'title'       => 'Logo Image',
+		'section_id'  => 'general',
+		'type'        => 'media',
+		'default'     => '',
+		'description' => 'Upload a logo image for your site.',
+	]);
 }
 add_action( 'plugins_loaded', 'nano_options_init' );

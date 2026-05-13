@@ -24,13 +24,21 @@ class NanoOptions_Framework {
 	 */
 	private static $sections = array();
 
-	/**
-	 * Registered fields.
-	 *
-	 * @since 1.0.0
-	 * @var array
-	 */
-	private static $fields = array();
+/**
+ * Registered fields.
+ *
+ * @since 1.0.0
+ * @var array
+ */
+private static $fields = array();
+
+/**
+ * Flag to indicate if media uploader is needed.
+ *
+ * @since 1.0.0
+ * @var bool
+ */
+private static $needs_media_uploader = false;
 
 	/**
 	 * Initialize the framework.
@@ -139,47 +147,55 @@ class NanoOptions_Framework {
 	}
 
 	/**
- 	 * Render a field.
- 	 *
- 	 * @since 1.0.0
- 	 *
- 	 * @param array $field Field data.
- 	 * @return void
- 	 */
- 	private static function render_field( $field ) {
- 		$field_id   = $field['id'];
- 		$field_type = $field['type'];
- 		$field_args = $field['args'];
- 		
- 		// Get current value.
- 		$options = get_option( self::$config['option_name'] );
- 		if ( isset( $options[ $field_id ] ) ) {
- 			$value = $options[ $field_id ];
- 		} else {
- 			// Use default value if provided, otherwise empty string.
- 			$value = isset( $field_args['default'] ) ? $field_args['default'] : '';
- 		}
- 		
- 		// Prepare field arguments for renderer.
- 		$renderer_args = array(
- 			'id'    => $field_id,
- 			'name'  => self::$config['option_name'] . '[' . $field_id . ']',
- 			'title' => $field['title'],
- 		);
- 		
- 		if ( ! empty( $field_args ) && is_array( $field_args ) ) {
- 			$renderer_args = array_merge( $renderer_args, $field_args );
- 		}
- 		
- 		// Call the field type renderer.
- 		$renderer_class = 'NanoOptions_Field_' . ucfirst( strtolower( $field_type ) );
- 		if ( class_exists( $renderer_class ) && method_exists( $renderer_class, 'render' ) ) {
- 			call_user_func( array( $renderer_class, 'render' ), $renderer_args, $value );
- 		} else {
- 			// Fallback to text field.
- 			NanoOptions_Field_Text::render( $renderer_args, $value );
- 		}
- 	}
+	 * Render a field.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param array $field Field data.
+	 * @return void
+	 */
+	private static function render_field( $field ) {
+		$field_id   = $field['id'];
+		$field_type = $field['type'];
+		$field_args = $field['args'];
+		
+		// Check if we need media uploader or color picker.
+		if ( $field_type === 'media' ) {
+			self::$needs_media_uploader = true;
+		}
+		if ( $field_type === 'color' ) {
+			self::$needs_color_picker = true;
+		}
+		
+		// Get current value.
+		$options = get_option( self::$config['option_name'] );
+		if ( isset( $options[ $field_id ] ) ) {
+			$value = $options[ $field_id ];
+		} else {
+			// Use default value if provided, otherwise empty string.
+			$value = isset( $field_args['default'] ) ? $field_args['default'] : '';
+		}
+		
+		// Prepare field arguments for renderer.
+		$renderer_args = array(
+			'id'    => $field_id,
+			'name'  => self::$config['option_name'] . '[' . $field_id . ']',
+			'title' => $field['title'],
+		);
+		
+		if ( ! empty( $field_args ) && is_array( $field_args ) ) {
+			$renderer_args = array_merge( $renderer_args, $field_args );
+		}
+		
+		// Call the field type renderer.
+		$renderer_class = 'NanoOptions_Field_' . ucfirst( strtolower( $field_type ) );
+		if ( class_exists( $renderer_class ) && method_exists( $renderer_class, 'render' ) ) {
+			call_user_func( array( $renderer_class, 'render' ), $renderer_args, $value );
+		} else {
+			// Fallback to text field.
+			NanoOptions_Field_Text::render( $renderer_args, $value );
+		}
+	}
 
 	/**
 	 * Register admin menu.
@@ -272,8 +288,13 @@ class NanoOptions_Framework {
 				if ( '' === $sanitized[ $key ] ) {
 					$sanitized[ $key ] = $value;
 				}
-			} else {
-				// For all other fields, allow any value (could be improved with field-specific sanitization).
+			} 
+			// For media fields, sanitize as URL.
+			elseif ( preg_match('/^media$/', $key) ) {
+				$sanitized[ $key ] = esc_url_raw( $value );
+			}
+			// For all other fields, allow any value (could be improved with field-specific sanitization).
+			else {
 				$sanitized[ $key ] = $value;
 			}
 		}
@@ -334,19 +355,56 @@ class NanoOptions_Framework {
 			true
 		);
 
-		// Check if we are on the NanoOptions settings page to load color picker assets.
+		// Check if we are on the NanoOptions settings page to load assets.
 		$screen = get_current_screen();
 		if ( $screen && isset( $screen->id ) && $screen->id === self::$config['menu_slug'] ) {
-			// Enqueue WordPress color picker script and style.
-			wp_enqueue_style( 'wp-color-picker' );
-			wp_enqueue_script( 'wp-color-picker' );
+			// Enqueue WordPress color picker script and style if needed.
+			if ( self::$needs_color_picker ) {
+				wp_enqueue_style( 'wp-color-picker' );
+				wp_enqueue_script( 'wp-color-picker' );
 
-			// Add inline script to initialize color picker for inputs with class 'np-color-picker'.
-			wp_add_inline_script( 'wp-color-picker', '
-				jQuery(document).ready(function($){
-					$(".np-color-picker").wpColorPicker();
-				});
-			' );
+				// Add inline script to initialize color picker for inputs with class 'np-color-picker'.
+				wp_add_inline_script( 'wp-color-picker', '
+					jQuery(document).ready(function($){
+						$(".np-color-picker").wpColorPicker();
+					});
+				' );
+			}
+			
+			// Enqueue media uploader if needed.
+			if ( self::$needs_media_uploader ) {
+				wp_enqueue_media();
+				
+				// Add inline script to handle media uploads.
+				wp_add_inline_script( 'nano-options-admin', '
+					jQuery(document).ready(function($){
+						// Handle media upload button clicks.
+						$(document).on(\'click\', \'.np-media-upload-button\', function(e){
+							e.preventDefault();
+							var button = $(this);
+							var custom_uploader = wp.media({
+								title: \'Choose Image\',
+								button: {
+									text: \'Choose Image\'
+								},
+								multiple: false
+							}).on(\'select\', function() {
+								var attachment = custom_uploader.state().get(\'selection\').first().toJSON();
+								button.prev(\'.np-media-url\').val(attachment.url);
+								button.prev(\'.np-media-preview\').attr(\'src\', attachment.url).show();
+							}).open();
+						});
+						
+						// Handle remove button clicks.
+						$(document).on(\'click\', \'.np-media-remove-button\', function(e){
+							e.preventDefault();
+							var button = $(this);
+							button.prevAll(\'.np-media-url\').val(\'\');
+							button.prevAll(\'.np-media-preview\').attr(\'src\', \'\').hide();
+						});
+					});
+				' );
+			}
 		}
 	}
 }
