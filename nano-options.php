@@ -220,5 +220,28 @@ function nano_options_init() {
 		'default'     => '',
 		'description' => 'This is an advanced setting in the second tab.',
 	]);
+	
+	// Example of conditional field - only show when checkbox is checked.
+	NanoOptions::field([
+		'id'          => 'enable_feature',
+		'title'       => 'Enable Feature',
+		'section_id'  => 'advanced',
+		'type'        => 'checkbox',
+		'default'     => '0',
+		'description' => 'Check to enable the feature.',
+	]);
+	
+	NanoOptions::field([
+		'id'          => 'feature_options',
+		'title'       => 'Feature Options',
+		'section_id'  => 'advanced',
+		'type'        => 'text',
+		'default'     => '',
+		'description' => 'Options for the feature (only visible when enabled).',
+		'condition'   => [
+			'field' => 'enable_feature',
+			'value' => '1',
+		]
+	]);
 }
 add_action( 'plugins_loaded', 'nano_options_init' );

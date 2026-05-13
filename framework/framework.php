@@ -40,6 +40,22 @@ private static $fields = array();
  */
 private static $needs_media_uploader = false;
 
+/**
+ * Flag to indicate if color picker is needed.
+ *
+ * @since 1.0.0
+ * @var bool
+ */
+private static $needs_color_picker = false;
+
+/**
+ * Flag to indicate if conditional JS is needed.
+ *
+ * @since 1.0.0
+ * @var bool
+ */
+private static $needs_conditional_js = false;
+
 	/**
 	 * Initialize the framework.
 	 *
@@ -93,46 +109,51 @@ private static $needs_media_uploader = false;
 	}
 
 	/**
- 	 * Register a field.
- 	 *
- 	 * @since 1.0.0
- 	 *
- 	 * @param array $args {
- 	 *     Array of field arguments.
- 	 *
- 	 *     @type string $id          Field ID.
- 	 *     @type string $title       Field title.
- 	 *     @type string $section_id  Section ID to add field to.
- 	 *     @type string $type        Field type (default: text).
- 	 *     @type mixed  $default     Default value.
- 	 *     @type string $description Field description.
- 	 *     @type array  $attributes  HTML attributes.
- 	 * }
- 	 */
- 	public static function field( array $args ) {
- 		// Extract special parameters that go into field args.
- 		$field_args = array();
- 		if ( isset( $args['default'] ) ) {
- 			$field_args['default'] = $args['default'];
- 			unset( $args['default'] );
- 		}
- 		if ( isset( $args['description'] ) ) {
- 			$field_args['description'] = $args['description'];
- 			unset( $args['description'] );
- 		}
- 		if ( isset( $args['attributes'] ) ) {
- 			$field_args['attributes'] = $args['attributes'];
- 			unset( $args['attributes'] );
- 		}
- 		
- 		self::$fields[] = wp_parse_args( $args, array(
- 			'id'          => '',
- 			'title'       => '',
- 			'section_id'  => '',
- 			'type'        => 'text',
- 			'args'        => $field_args,
- 		) );
- 	}
+	 * Register a field.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param array $args {
+	 *     Array of field arguments.
+	 *
+	 *     @type string $id          Field ID.
+	 *     @type string $title       Field title.
+	 *     @type string $section_id  Section ID to add field to.
+	 *     @type string $type        Field type (default: text).
+	 *     @type mixed  $default     Default value.
+	 *     @type string $description Field description.
+	 *     @type array  $attributes  HTML attributes.
+	 *     @type array  $condition   Conditional visibility rules.
+	 * }
+	 */
+	public static function field( array $args ) {
+		// Extract special parameters that go into field args.
+		$field_args = array();
+		if ( isset( $args['default'] ) ) {
+			$field_args['default'] = $args['default'];
+			unset( $args['default'] );
+		}
+		if ( isset( $args['description'] ) ) {
+			$field_args['description'] = $args['description'];
+			unset( $args['description'] );
+		}
+		if ( isset( $args['attributes'] ) ) {
+			$field_args['attributes'] = $args['attributes'];
+			unset( $args['attributes'] );
+		}
+		if ( isset( $args['condition'] ) ) {
+			$field_args['condition'] = $args['condition'];
+			unset( $args['condition'] );
+		}
+		
+		self::$fields[] = wp_parse_args( $args, array(
+			'id'          => '',
+			'title'       => '',
+			'section_id'  => '',
+			'type'        => 'text',
+			'args'        => $field_args,
+		) );
+	}
 
 	/**
 	 * Include all field types.
@@ -159,12 +180,15 @@ private static $needs_media_uploader = false;
 		$field_type = $field['type'];
 		$field_args = $field['args'];
 		
-		// Check if we need media uploader or color picker.
+		// Check if we need media uploader, color picker, or conditional JS.
 		if ( $field_type === 'media' ) {
 			self::$needs_media_uploader = true;
 		}
 		if ( $field_type === 'color' ) {
 			self::$needs_color_picker = true;
+		}
+		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
+			self::$needs_conditional_js = true;
 		}
 		
 		// Get current value.
@@ -187,6 +211,11 @@ private static $needs_media_uploader = false;
 			$renderer_args = array_merge( $renderer_args, $field_args );
 		}
 		
+		// Start conditional wrapper if needed.
+		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
+			echo '<div class="np-condition-field" data-condition="' . esc_attr( wp_json_encode( $field['condition'] ) ) . '" style="display:none;">';
+		}
+		
 		// Call the field type renderer.
 		$renderer_class = 'NanoOptions_Field_' . ucfirst( strtolower( $field_type ) );
 		if ( class_exists( $renderer_class ) && method_exists( $renderer_class, 'render' ) ) {
@@ -194,6 +223,11 @@ private static $needs_media_uploader = false;
 		} else {
 			// Fallback to text field.
 			NanoOptions_Field_Text::render( $renderer_args, $value );
+		}
+		
+		// End conditional wrapper if needed.
+		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
+			echo '</div>';
 		}
 	}
 
@@ -488,6 +522,66 @@ private static $needs_media_uploader = false;
 							var button = $(this);
 							button.prevAll(\'.np-media-url\').val(\'\');
 							button.prevAll(\'.np-media-preview\').attr(\'src\', \'\').hide();
+						});
+					});
+				' );
+			}
+			
+			// Enqueue conditional JS if needed.
+			if ( self::$needs_conditional_js ) {
+				// Add inline script for conditional field visibility.
+				wp_add_inline_script( 'nano-options-admin', '
+					jQuery(document).ready(function($){
+						// Conditional field visibility.
+						function updateConditionals() {
+							$("[data-condition]").each(function() {
+								var $field = $(this);
+								var condition = $field.data("condition");
+								if (typeof condition === "string") {
+									try {
+										condition = JSON.parse(condition);
+									} catch(e) {
+										return; // Invalid JSON
+									}
+								}
+								
+								if (condition && condition.field && condition.value !== undefined) {
+									var $controller = $("#" + condition.field);
+									var controllerValue = $controller.val();
+									
+									// For checkboxes, check if checked
+									if ($controller.is(":checkbox")) {
+										controllerValue = $controller.is(":checked") ? "1" : "0";
+									}
+									
+									// Show/hide based on condition
+									if (controllerValue == condition.value) {
+										$field.show();
+									} else {
+										$field.hide();
+									}
+								}
+							});
+						}
+						
+						// Run on load and when controllers change
+						updateConditionals();
+						$("[data-condition]").each(function() {
+							var condition = $(this).data("condition");
+							if (typeof condition === "string") {
+								try {
+									condition = JSON.parse(condition);
+								} catch(e) {
+									return;
+								}
+							}
+							
+							if (condition && condition.field) {
+								var $controller = $("#" + condition.field);
+								$controller.on("change keyup", function(){
+									updateConditionals();
+								});
+							}
 						});
 					});
 				' );
