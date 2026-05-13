@@ -369,6 +369,79 @@ private static $needs_conditional_js = false;
 			return;
 		}
 
+		// Settings saved notice.
+		if ( isset( $_GET['settings-updated'] ) ) {
+			add_settings_error( self::$config['option_name'], 'nano_options_message', __( 'Settings saved.', 'nano-options' ), 'updated' );
+		}
+
+		// Show settings errors.
+		settings_errors( self::$config['option_name'] );
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html( self::$config['menu_title'] ); ?></h1>
+			<form method="post" action="options.php">
+				<?php
+				settings_fields( self::$config['option_name'] );
+				
+				// Import/Export section.
+				echo '<h2>' . esc_html__( 'Import/Export Settings', 'nano-options' ) . '</h2>';
+				echo '<table class="form-table">';
+				echo '<tr><th scope="row">' . esc_html__( 'Export Settings', 'nano-options' ) . '</th><td>';
+				echo '<input type="submit" name="nano_options_export" value="' . esc_attr__( 'Export Settings', 'nano-options' ) . '" class="button" />';
+				echo wp_nonce_field( 'nano_options_export', 'nano_options_export_nonce', false, false );
+				echo '</td></tr>';
+				echo '<tr><th scope="row">' . esc_html__( 'Import Settings', 'nano-options' ) . '</th><td>';
+				echo '<input type="file" name="nano_options_import_file" id="nano_options_import_file" />';
+				echo '<input type="submit" name="nano_options_import" value="' . esc_attr__( 'Import Settings', 'nano-options' ) . '" class="button" />';
+				echo '<p class="description">' . esc_html__( 'Upload a JSON file exported from NanoOptions to import settings.', 'nano-options' ) . '</p>';
+				echo wp_nonce_field( 'nano_options_import', 'nano_options_import_nonce', false, false );
+				echo '</td></tr>';
+				echo '</table>';
+
+				do_settings_sections( self::$config['menu_slug'] );
+				submit_button();
+				?>
+			</form>
+		</div>
+		<?php
+		// Tab switching JS.
+		if ( count( $this->get_tabs() ) > 1 ) {
+			?>
+			<script type="text/javascript">
+				jQuery(document).ready(function($){
+					$(".nav-tab-wrapper a").on("click", function(e){
+						e.preventDefault();
+						var tab = $(this).attr("href").split("tab=")[1];
+						$(".tab-panel").hide();
+						$("#tab-" + tab).show();
+						$(".nav-tab").removeClass("nav-tab-active");
+						$(this).addClass("nav-tab-active");
+					});
+				});
+			</script>
+			<?php
+		}
+	}
+
+	/**
+	 * Get tabs from sections.
+	 *
+	 * @since 1.0.0
+	 * @return array
+	 */
+	private static function get_tabs() {
+		$tabs = array();
+		foreach ( self::$sections as $section ) {
+			if ( ! empty( $section['tab'] ) && ! in_array( $section['tab'], $tabs ) ) {
+				$tabs[] = $section['tab'];
+			}
+		}
+		if ( empty( $tabs ) ) {
+			$tabs = array( 'default' );
+		}
+		return $tabs;
+	}
+
 		// Handle export action.
 		if ( isset( $_POST['nano_options_export'] ) && isset( $_POST['nano_options_export_nonce'] ) && wp_verify_nonce( $_POST['nano_options_export_nonce'], 'nano_options_export' ) ) {
 			$options = get_option( self::$config['option_name'] );
@@ -584,117 +657,5 @@ private static $needs_conditional_js = false;
 			'1.0.0',
 			true
 		);
-
-		// Check if we are on the NanoOptions settings page to load assets.
-		$screen = get_current_screen();
-		if ( $screen && isset( $screen->id ) && $screen->id === self::$config['menu_slug'] ) {
-			// Enqueue WordPress color picker script and style if needed.
-			if ( self::$needs_color_picker ) {
-				wp_enqueue_style( 'wp-color-picker' );
-				wp_enqueue_script( 'wp-color-picker' );
-
-				// Add inline script to initialize color picker for inputs with class 'np-color-picker'.
-				wp_add_inline_script( 'wp-color-picker', '
-					jQuery(document).ready(function($){
-						$(".np-color-picker").wpColorPicker();
-					});
-				' );
-			}
-			
-			// Enqueue media uploader if needed.
-			if ( self::$needs_media_uploader ) {
-				wp_enqueue_media();
-				
-				// Add inline script to handle media uploads.
-				wp_add_inline_script( 'nano-options-admin', '
-					jQuery(document).ready(function($){
-						// Handle media upload button clicks.
-						$(document).on(\'click\', \'.np-media-upload-button\', function(e){
-							e.preventDefault();
-							var button = $(this);
-							var custom_uploader = wp.media({
-								title: \'Choose Image\',
-								button: {
-									text: \'Choose Image\'
-								},
-								multiple: false
-							}).on(\'select\', function() {
-								var attachment = custom_uploader.state().get(\'selection\').first().toJSON();
-								button.prev(\'.np-media-url\').val(attachment.url);
-								button.prev(\'.np-media-preview\').attr(\'src\', attachment.url).show();
-							}).open();
-						});
-						
-						// Handle remove button clicks.
-						$(document).on(\'click\', \'.np-media-remove-button\', function(e){
-							e.preventDefault();
-							var button = $(this);
-							button.prevAll(\'.np-media-url\').val(\'\');
-							button.prevAll(\'.np-media-preview\').attr(\'src\', \'\').hide();
-						});
-					});
-				' );
-			}
-			
-			// Enqueue conditional JS if needed.
-			if ( self::$needs_conditional_js ) {
-				// Add inline script for conditional field visibility.
-				wp_add_inline_script( 'nano-options-admin', '
-					jQuery(document).ready(function($){
-						// Conditional field visibility.
-						function updateConditionals() {
-							$("[data-condition]").each(function() {
-								var $field = $(this);
-								var condition = $field.data("condition");
-								if (typeof condition === "string") {
-									try {
-										condition = JSON.parse(condition);
-									} catch(e) {
-										return; // Invalid JSON
-									}
-								}
-								
-								if (condition && condition.field && condition.value !== undefined) {
-									var $controller = $("#" + condition.field);
-									var controllerValue = $controller.val();
-									
-									// For checkboxes, check if checked
-									if ($controller.is(":checkbox")) {
-										controllerValue = $controller.is(":checked") ? "1" : "0";
-									}
-									
-									// Show/hide based on condition
-									if (controllerValue == condition.value) {
-										$field.show();
-									} else {
-										$field.hide();
-									}
-								}
-							});
-						}
-						
-						// Run on load and when controllers change
-						updateConditionals();
-						$("[data-condition]").each(function() {
-							var condition = $(this).data("condition");
-							if (typeof condition === "string") {
-								try {
-									condition = JSON.parse(condition);
-								} catch(e) {
-									return;
-								}
-							}
-							
-							if (condition && condition.field) {
-								var $controller = $("#" + condition.field);
-								$controller.on("change keyup", function(){
-									updateConditionals();
-								});
-							}
-						});
-					});
-				' );
-			}
-		}
 	}
 }
