@@ -280,22 +280,46 @@ private static $needs_media_uploader = false;
 		}
 		
 		$sanitized = array();
-		foreach ( $input as $key => $value ) {
-			// For color fields, sanitize as hex color.
-			if ( preg_match('/^color$/', $key) ) {
-				$sanitized[ $key ] = sanitize_hex_color( $value );
-				// If sanitize_hex_color returns empty string, keep original or use default.
-				if ( '' === $sanitized[ $key ] ) {
-					$sanitized[ $key ] = $value;
-				}
-			} 
-			// For media fields, sanitize as URL.
-			elseif ( preg_match('/^media$/', $key) ) {
-				$sanitized[ $key ] = esc_url_raw( $value );
+		
+		// Only sanitize fields that we know about.
+		foreach ( self::$fields as $field ) {
+			$id = $field['id'];
+			
+			// If the field is not in the input, skip (the existing value will be preserved by Settings API).
+			if ( ! isset( $input[ $id ] ) ) {
+				continue;
 			}
-			// For all other fields, allow any value (could be improved with field-specific sanitization).
-			else {
-				$sanitized[ $key ] = $value;
+			
+			$value = $input[ $id ];
+			$type  = $field['type'];
+			
+			switch ( $type ) {
+				case 'text':
+					$sanitized[ $id ] = sanitize_text_field( $value );
+					break;
+				case 'checkbox':
+					$sanitized[ $id ] = ! empty( $value ) ? 1 : 0;
+					break;
+				case 'color':
+					$sanitized[ $id ] = sanitize_hex_color( $value );
+					break;
+				case 'textarea':
+					$sanitized[ $id ] = sanitize_textarea_field( $value );
+					break;
+				case 'select':
+					// Whitelist allowed values.
+					$options = isset( $field['args']['options'] ) && is_array( $field['args']['options'] ) 
+						? $field['args']['options'] 
+						: array();
+					$sanitized[ $id ] = in_array( $value, $options, true ) ? $value : '';
+					break;
+				case 'media':
+					$sanitized[ $id ] = esc_url_raw( $value );
+					break;
+				default:
+					// Fallback for unknown types: treat as text.
+					$sanitized[ $id ] = sanitize_text_field( $value );
+					break;
 			}
 		}
 		
