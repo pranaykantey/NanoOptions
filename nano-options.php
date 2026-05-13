@@ -186,5 +186,14 @@ function nano_options_init() {
 			]
 		]
 	]);
+	
+	NanoOptions::field([
+		'id'          => 'accent_color',
+		'title'       => 'Accent Color',
+		'section_id'  => 'general',
+		'type'        => 'color',
+		'default'     => '#0073aa',
+		'description' => 'Choose an accent color for your site.',
+	]);
 }
 add_action( 'plugins_loaded', 'nano_options_init' );

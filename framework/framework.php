@@ -262,7 +262,23 @@ class NanoOptions_Framework {
 		if ( ! is_array( $input ) ) {
 			return array();
 		}
-		return $input;
+		
+		$sanitized = array();
+		foreach ( $input as $key => $value ) {
+			// For color fields, sanitize as hex color.
+			if ( preg_match('/^color$/', $key) ) {
+				$sanitized[ $key ] = sanitize_hex_color( $value );
+				// If sanitize_hex_color returns empty string, keep original or use default.
+				if ( '' === $sanitized[ $key ] ) {
+					$sanitized[ $key ] = $value;
+				}
+			} else {
+				// For all other fields, allow any value (could be improved with field-specific sanitization).
+				$sanitized[ $key ] = $value;
+			}
+		}
+		
+		return $sanitized;
 	}
 
 	/**
@@ -317,5 +333,20 @@ class NanoOptions_Framework {
 			'1.0.0',
 			true
 		);
+
+		// Check if we are on the NanoOptions settings page to load color picker assets.
+		$screen = get_current_screen();
+		if ( $screen && isset( $screen->id ) && $screen->id === self::$config['menu_slug'] ) {
+			// Enqueue WordPress color picker script and style.
+			wp_enqueue_style( 'wp-color-picker' );
+			wp_enqueue_script( 'wp-color-picker' );
+
+			// Add inline script to initialize color picker for inputs with class 'np-color-picker'.
+			wp_add_inline_script( 'wp-color-picker', '
+				jQuery(document).ready(function($){
+					$(".np-color-picker").wpColorPicker();
+				});
+			' );
+		}
 	}
 }
