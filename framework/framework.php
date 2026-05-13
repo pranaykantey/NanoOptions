@@ -146,6 +146,50 @@ private static $needs_conditional_js = false;
 			unset( $args['condition'] );
 		}
 		
+		// Set asset flags based on field type and condition.
+		if ( ! empty( $args['type'] ) ) {
+			switch ( $args['type'] ) {
+				case 'media':
+					self::$needs_media_uploader = true;
+					break;
+				case 'color':
+					self::$needs_color_picker = true;
+					break;
+				default:
+					// Check for condition
+					if ( ! empty( $args['condition'] ) && is_array( $args['condition'] ) ) {
+						self::$needs_conditional_js = true;
+					}
+					break;
+			}
+		} else {
+			// Default type is text, check for condition.
+			if ( ! empty( $args['condition'] ) && is_array( $args['condition'] ) ) {
+				self::$needs_conditional_js = true;
+			}
+		}
+		
+		self::$fields[] = wp_parse_args( $args, array(
+			'id'          => '',
+			'title'       => '',
+			'section_id'  => '',
+			'type'        => 'text',
+			'args'        => $field_args,
+		) );
+	}
+		if ( isset( $args['description'] ) ) {
+			$field_args['description'] = $args['description'];
+			unset( $args['description'] );
+		}
+		if ( isset( $args['attributes'] ) ) {
+			$field_args['attributes'] = $args['attributes'];
+			unset( $args['attributes'] );
+		}
+		if ( isset( $args['condition'] ) ) {
+			$field_args['condition'] = $args['condition'];
+			unset( $args['condition'] );
+		}
+		
 		self::$fields[] = wp_parse_args( $args, array(
 			'id'          => '',
 			'title'       => '',
@@ -179,17 +223,6 @@ private static $needs_conditional_js = false;
 		$field_id   = $field['id'];
 		$field_type = $field['type'];
 		$field_args = $field['args'];
-		
-		// Check if we need media uploader, color picker, or conditional JS.
-		if ( $field_type === 'media' ) {
-			self::$needs_media_uploader = true;
-		}
-		if ( $field_type === 'color' ) {
-			self::$needs_color_picker = true;
-		}
-		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
-			self::$needs_conditional_js = true;
-		}
 		
 		// Get current value.
 		$options = get_option( self::$config['option_name'] );
