@@ -369,6 +369,115 @@ private static $needs_conditional_js = false;
 			return;
 		}
 
+		// Handle export action.
+		if ( isset( $_POST['nano_options_export'] ) && isset( $_POST['nano_options_export_nonce'] ) && wp_verify_nonce( $_POST['nano_options_export_nonce'], 'nano_options_export' ) ) {
+			$options = get_option( self::$config['option_name'] );
+			$json = wp_json_encode( $options );
+
+			header( 'Content-Description: File Transfer' );
+			header( 'Content-Type: application/json' );
+			header( 'Content-Disposition: attachment; filename=nano-options-settings.json' );
+			header( 'Expires: 0' );
+			header( 'Cache-Control: must-revalidate' );
+			header( 'Pragma: public' );
+			echo $json;
+			die;
+		}
+
+		// Handle import action.
+		if ( isset( $_POST['nano_options_import'] ) && isset( $_POST['nano_options_import_nonce'] ) && wp_verify_nonce( $_POST['nano_options_import_nonce'], 'nano_options_import' ) ) {
+			if ( ! isset( $_FILES['nano_options_import_file'] ) || ! is_uploaded_file( $_FILES['nano_options_import_file']['tmp_name'] ) ) {
+				add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'No file uploaded.', 'nano-options' ), 'error' );
+			} else {
+				$file = $_FILES['nano_options_import_file']['tmp_name'];
+				$data = file_get_contents( $file );
+				$json = json_decode( $data, true );
+
+				if ( json_last_error() !== JSON_ERROR_NONE ) {
+					add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'Invalid JSON file.', 'nano-options' ), 'error' );
+				} else {
+					// Validate and sanitize the imported data.
+					$imported = array();
+					foreach ( self::$fields as $field ) {
+						$id = $field['id'];
+						if ( isset( $json[ $id ] ) ) {
+							$value = $json[ $id ];
+							$type  = $field['type'];
+							switch ( $type ) {
+								case 'text':
+									$imported[ $id ] = sanitize_text_field( $value );
+									break;
+								case 'checkbox':
+									$imported[ $id ] = ! empty( $value ) ? 1 : 0;
+									break;
+								case 'color':
+									$imported[ $id ] = sanitize_hex_color( $value );
+									break;
+								case 'textarea':
+									$imported[ $id ] = sanitize_textarea_field( $value );
+									break;
+								case 'select':
+									$options = isset( $field['args']['options'] ) && is_array( $field['args']['options'] ) 
+										? $field['args']['options'] 
+										: array();
+									$imported[ $id ] = in_array( $value, $options, true ) ? $value : '';
+									break;
+								case 'media':
+									$imported[ $id ] = esc_url_raw( $value );
+									break;
+								default:
+									$imported[ $id ] = sanitize_text_field( $value );
+									break;
+							}
+						}
+					}
+
+					if ( update_option( self::$config['option_name'], $imported ) ) {
+						add_settings_error( self::$config['option_name'], 'nano_options_import_success', __( 'Settings imported successfully.', 'nano-options' ), 'updated' );
+					} else {
+						add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'Failed to import settings.', 'nano-options' ), 'error' );
+					}
+				}
+			}
+		}
+
+		// Settings saved notice.
+		if ( isset( $_GET['settings-updated'] ) ) {
+			add_settings_error( self::$config['option_name'], 'nano_options_message', __( 'Settings saved.', 'nano-options' ), 'updated' );
+		}
+
+		// Show settings errors.
+		settings_errors( self::$config['option_name'] );
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html( self::$config['menu_title'] ); ?></h1>
+			<form method="post" action="options.php">
+				<?php
+				settings_fields( self::$config['option_name'] );
+				
+				// Import/Export section.
+				echo '<h2>' . esc_html__( 'Import/Export Settings', 'nano-options' ) . '</h2>';
+				echo '<table class="form-table">';
+				echo '<tr><th scope="row">' . esc_html__( 'Export Settings', 'nano-options' ) . '</th><td>';
+				echo '<input type="submit" name="nano_options_export" value="' . esc_attr__( 'Export Settings', 'nano-options' ) . '" class="button" />';
+				echo wp_nonce_field( 'nano_options_export', 'nano_options_export_nonce', false, false );
+				echo '</td></tr>';
+				echo '<tr><th scope="row">' . esc_html__( 'Import Settings', 'nano-options' ) . '</th><td>';
+				echo '<input type="file" name="nano_options_import_file" id="nano_options_import_file" />';
+				echo '<input type="submit" name="nano_options_import" value="' . esc_attr__( 'Import Settings', 'nano-options' ) . '" class="button" />';
+				echo '<p class="description">' . esc_html__( 'Upload a JSON file exported from NanoOptions to import settings.', 'nano-options' ) . '</p>';
+				echo wp_nonce_field( 'nano_options_import', 'nano_options_import_nonce', false, false );
+				echo '</td></tr>';
+				echo '</table>';
+
+				do_settings_sections( self::$config['menu_slug'] );
+				submit_button();
+				?>
+			</form>
+		</div>
+		<?php
+	}
+
 		// Settings saved notice.
 		if ( isset( $_GET['settings-updated'] ) ) {
 			add_settings_error( self::$config['option_name'], 'nano_options_message', __( 'Settings saved.', 'nano-options' ), 'updated' );
