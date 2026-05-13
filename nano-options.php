@@ -146,10 +146,17 @@ function nano_options_init() {
 		'option_name'=> 'nano_options',
 	]);
 	
-	// Register a sample section.
+	// Register sample sections with tabs.
 	NanoOptions::section([
 		'id'    => 'general',
 		'title' => 'General Settings',
+		'tab'   => 'general',
+	]);
+	
+	NanoOptions::section([
+		'id'    => 'advanced',
+		'title' => 'Advanced Settings',
+		'tab'   => 'advanced',
 	]);
 	
 	// Register sample fields.
@@ -203,6 +210,15 @@ function nano_options_init() {
 		'type'        => 'media',
 		'default'     => '',
 		'description' => 'Upload a logo image for your site.',
+	]);
+	
+	NanoOptions::field([
+		'id'          => 'advanced_text',
+		'title'       => 'Advanced Text Setting',
+		'section_id'  => 'advanced',
+		'type'        => 'text',
+		'default'     => '',
+		'description' => 'This is an advanced setting in the second tab.',
 	]);
 }
 add_action( 'plugins_loaded', 'nano_options_init' );

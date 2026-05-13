@@ -348,10 +348,73 @@ private static $needs_media_uploader = false;
 			<form method="post" action="options.php">
 				<?php
 				settings_fields( self::$config['option_name'] );
-				do_settings_sections( self::$config['menu_slug'] );
+
+				// Get tabs from sections.
+				$tabs = array();
+				foreach ( self::$sections as $section ) {
+					if ( ! empty( $section['tab'] ) && ! in_array( $section['tab'], $tabs ) ) {
+						$tabs[] = $section['tab'];
+					}
+				}
+				if ( empty( $tabs ) ) {
+					$tabs = array( 'default' );
+				}
+
+				$current_tab = isset( $_GET['tab'] ) && in_array( $_GET['tab'], $tabs ) ? $_GET['tab'] : $tabs[0];
+
+				// Tab navigation.
+				echo '<h2 class="nav-tab-wrapper">';
+				foreach ( $tabs as $tab ) {
+					$current = ( $current_tab === $tab ) ? ' nav-tab-active' : '';
+					echo '<a href="' . esc_url( add_query_arg( 'tab', $tab ) ) . '" class="nav-tab' . esc_attr( $current ) . '">' . esc_html( ucfirst( $tab ) ) . '</a>';
+				}
+				echo '</h2>';
+
+				// Tab panels.
+				foreach ( $tabs as $tab ) {
+					$style = ( $current_tab === $tab ) ? '' : ' style="display:none;"';
+					echo '<div class="tab-panel" id="tab-' . esc_attr( $tab ) . '"' . $style . '>';
+
+					// Output sections for this tab.
+					foreach ( self::$sections as $section ) {
+						if ( $section['tab'] === $tab ) {
+							if ( ! empty( $section['title'] ) ) {
+								echo '<h2 class="tab-section-title">' . esc_html( $section['title'] ) . '</h2>';
+							}
+							// Output fields for this section.
+							foreach ( self::$fields as $field ) {
+								if ( $field['section_id'] === $section['id'] ) {
+									self::render_field( $field );
+								}
+							}
+						}
+					}
+
+					echo '</div>'; // end tab-panel
+				}
+
 				submit_button();
 				?>
 			</form>
+			<?php
+			// Tab switching JS.
+			if ( count( $tabs ) > 1 ) {
+				?>
+				<script type="text/javascript">
+					jQuery(document).ready(function($){
+						$(".nav-tab-wrapper a").on("click", function(e){
+							e.preventDefault();
+							var tab = $(this).attr("href").split("tab=")[1];
+							$(".tab-panel").hide();
+							$("#tab-" + tab).show();
+							$(".nav-tab").removeClass("nav-tab-active");
+							$(this).addClass("nav-tab-active");
+						});
+					});
+				</script>
+				<?php
+			}
+			?>
 		</div>
 		<?php
 	}
