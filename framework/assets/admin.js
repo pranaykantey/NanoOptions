@@ -1,94 +1,103 @@
-// NanoOptions Admin JavaScript
-// Production-optimized, minify-ready
+// NanoOptions Admin JavaScript – Vanilla, lightweight.
+// (c) NanoOptions, MIT License
 
 jQuery(document).ready(function($) {
-    // Tab switching
-    if ($('.nav-tab-wrapper').length) {
-        $('.nav-tab-wrapper a').on('click', function(e) {
-            e.preventDefault();
-            var tab = $(this).attr('href').split('tab=')[1];
-            $('.tab-panel').hide();
-            $('#tab-' + tab).show();
-            $('.nav-tab').removeClass('nav-tab-active');
-            $(this).addClass('nav-tab-active');
-        });
-    }
+    'use strict';
 
-    // Conditional fields visibility
-    function updateConditionals() {
-        $('[data-condition]').each(function() {
-            var $field = $(this);
-            var condition = $field.data('condition');
-            if (typeof condition === 'string') {
-                try {
-                    condition = JSON.parse(condition);
-                } catch(e) {
-                    return; // Invalid JSON
-                }
-            }
-            if (condition && condition.field && condition.value !== undefined) {
-                var $controller = $('#' + condition.field);
-                var controllerValue = $controller.val();
-                // For checkboxes, check if checked
-                if ($controller.is(':checkbox')) {
-                    controllerValue = $controller.is(':checked') ? '1' : '0';
-                }
-                // Show/hide based on condition
-                if (controllerValue == condition.value) {
-                    $field.show();
-                } else {
-                    $field.hide();
-                }
-            }
-        });
-    }
-    // Run on load
-    updateConditionals();
-    // Run when controllers change
-    $('[data-condition]').each(function() {
-        var condition = $(this).data('condition');
-        if (typeof condition === 'string') {
-            try {
-                condition = JSON.parse(condition);
-            } catch(e) {
-                return;
-            }
-        }
-        if (condition && condition.field) {
-            var $controller = $('#' + condition.field);
-            $controller.on('change keyup', function(){
-                updateConditionals();
-            });
-        }
+    /**
+     * Tab switching – works with native WP nav-tabs.
+     */
+    $('.nav-tab-wrapper a').on('click', function(e) {
+        e.preventDefault();
+        var href = $(this).attr('href');
+        var tab = href.split('tab=')[1];
+        $('.tab-panel, .nanooptions-section').hide();
+        $('#tab-' + tab + ', #section-' + tab).show(); // support both IDs
+        $('.nav-tab').removeClass('nav-tab-active');
+        $(this).addClass('nav-tab-active');
     });
 
-    // Media uploader - only if WordPress media API is available
-    if ($('.np-media-upload-button').length && typeof wp !== 'undefined' && wp.media) {
-        $(document).on('click', '.np-media-upload-button', function(e){
-            e.preventDefault();
-            var button = $(this);
-            var custom_uploader = wp.media({
-                title: 'Choose Image',
-                button: {
-                    text: 'Choose Image'
-                },
-                multiple: false
-            }).on('select', function() {
-                var attachment = custom_uploader.state().get('selection').first().toJSON();
-                button.prev('.np-media-url').val(attachment.url);
-                button.prev('.np-media-preview').attr('src', attachment.url).show();
-            }).open();
-        });
-        $(document).on('click', '.np-media-remove-button', function(e){
-            e.preventDefault();
-            var button = $(this);
-            button.prevAll('.np-media-url').val('');
-            button.prevAll('.np-media-preview').attr('src', '').hide();
+    /**
+     * Conditional fields – show/hide rows based on other field values.
+     */
+    function updateConditionals() {
+        $('[data-condition]').each(function() {
+            var $row       = $(this);
+            var condition  = $row.data('condition');
+
+            // Parse if string
+            if (typeof condition === 'string') {
+                try { condition = JSON.parse(condition); } catch(e) { return; }
+            }
+
+            if (!condition || !condition.field) return;
+
+            var $controller = $('#' + condition.field);
+            if (!$controller.length) return;
+
+            var ctrlVal;
+            if ($controller.is(':checkbox')) {
+                ctrlVal = $controller.is(':checked') ? '1' : '0';
+            } else {
+                ctrlVal = $controller.val();
+            }
+
+            var show = false;
+            switch (condition.compare) {
+                case '===': show = (ctrlVal === condition.value); break;
+                case '!==': show = (ctrlVal !== condition.value); break;
+                case '!=':  show = (ctrlVal != condition.value);  break;
+                case '==':
+                default:    show = (ctrlVal == condition.value);  break;
+            }
+
+            $row.toggle( show );
         });
     }
 
-    // Color picker - only if WordPress color picker is available
-    if ($('.np-color-picker').length && typeof $.wpColorPicker === 'function') {
+    // Initial evaluation
+    updateConditionals();
+
+    // Bind change events to controller fields
+    $(document).on('change keyup', '[data-condition]', function() {
+        updateConditionals();
+    });
+
+    /**
+     * Media uploader.
+     */
+    if ($('.np-media-upload-button').length && typeof wp !== 'undefined' && wp.media) {
+        $(document).on('click', '.np-media-upload-button', function(e) {
+            e.preventDefault();
+            var button = $(this);
+            var frame = wp.media({
+                title: button.data('frame-title') || 'Select Media',
+                button: { text: button.data('frame-button') || 'Select' },
+                multiple: false
+            });
+
+            frame.on('select', function() {
+                var attachment = frame.state().get('selection').first().toJSON();
+                button.siblings('.np-media-url').val(attachment.url);
+                var $preview = button.siblings('.np-media-preview');
+                $preview.attr('src', attachment.url).show();
+            });
+
+            frame.open();
+        });
+
+        $(document).on('click', '.np-media-remove-button', function(e) {
+            e.preventDefault();
+            var button = $(this);
+            button.siblings('.np-media-url').val('');
+            button.siblings('.np-media-preview').attr('src', '').hide();
+        });
+    }
+
+    /**
+     * Color picker.
+     */
+    if ($('.np-color-picker').length && typeof $.fn.wpColorPicker !== 'undefined') {
         $('.np-color-picker').wpColorPicker();
     }
 });

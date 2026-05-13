@@ -1,15 +1,15 @@
-/* NanoOptions Admin Styles */
+/* NanoOptions Admin Styles - Optimized for production */
 
-/* Tab Styles */
+/* Tab Navigation */
 .nav-tab-wrapper {
     margin: 0 0 20px 0;
     overflow: hidden;
     background: #f1f1f1;
+    display: flex;
+    flex-wrap: wrap;
 }
 .nav-tab-wrapper a {
-    float: left;
     padding: 10px 20px;
-    margin: 0;
     background: #f7f7f7;
     color: #555;
     text-decoration: none;
@@ -27,7 +27,7 @@
 
 /* Tab Panels */
 .tab-panel {
-    padding: 20px;
+    padding: 20px 0 0 0;
     border-top: 1px solid #ddd;
     margin-top: -1px;
     background: #fff;
@@ -37,42 +37,86 @@
     display: block;
 }
 
-/* Section Titles */
-.tab-section-title {
+/* Section Titles (inside tab panels) */
+.nanooptions-section {
+    margin-bottom: 30px;
+}
+.nanooptions-section-title {
     font-size: 20px;
     margin: 0 0 10px 0;
     padding: 0;
 }
 
-/* Form Elements */
+/* Form Table & Cells */
+.form-table th {
+    width: 150px;
+    padding: 20px 10px 20px 0;
+    vertical-align: top;
+}
+.form-table td {
+    padding: 20px 0;
+}
+.form-table .description {
+    margin-top: 5px;
+    font-style: italic;
+    color: #666;
+}
+
+/* Media Field Elements */
+.np-media-url {
+    width: 70%;
+    margin-right: 10px;
+}
 .np-media-preview {
     max-width: 150px;
     height: auto;
     margin: 10px 0;
     border: 1px solid #ddd;
     background: #f9f9f9;
+    display: block;
+}
+.np-media-upload-button,
+.np-media-remove-button {
+    margin: 5px 5px 0 0;
 }
 
-/* Import/Export Styles */
-.nano-options-import-export {
+/* Color Picker alignment */
+.np-color-picker {
+    width: 70%;
+}
+
+/* Import/Export Box (styled as card) */
+.form-table th[scope="row"] {
+    font-weight: 600;
+}
+.form-table .form-table {
     background: #f9f9f9;
     border: 1px solid #ddd;
     padding: 15px;
-    margin: 20px 0;
-}
-.nano-options-import-export h2 {
-    margin-top: 0;
+    margin-top: 10px;
 }
 
-/* Conditional Fields - initially hidden by JS */
-.np-condition-field {
+/* Conditional fields – initially hidden until JS evaluates */
+tr[data-condition] {
     display: none;
 }
 
-/* Responsive */
+/* Responsive adjustments */
 @media screen and (max-width: 782px) {
     .nav-tab-wrapper a {
         padding: 10px;
         font-size: 12px;
+    }
+    .form-table th {
+        width: auto;
+        display: block;
+        padding: 0 0 5px 0;
+    }
+    .form-table td {
+        display: block;
+        padding: 0 0 15px 0;
+    }
+    .np-media-url {
+        width: 100%;
     }
 }

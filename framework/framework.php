@@ -1,267 +1,174 @@
 <?php
+/**
+ * NanoOptions Framework Core
+ *
+ * @package NanoOptions
+ */
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * NanoOptions Framework.
+ * Core framework class – static methods.
  */
 class NanoOptions_Framework {
 
-	/**
-	 * Plugin configuration.
-	 *
-	 * @since 1.0.0
-	 * @var array
-	 */
-	private static $config = array();
+	/** @var array Configuration */
+	private static $config = [];
 
-	/**
-	 * Registered sections.
-	 *
-	 * @since 1.0.0
-	 * @var array
-	 */
-	private static $sections = array();
+	/** @var array Registered sections */
+	private static $sections = [];
 
-/**
- * Registered fields.
- *
- * @since 1.0.0
- * @var array
- */
-private static $fields = array();
+	/** @var array Registered fields */
+	private static $fields = [];
 
-/**
- * Flag to indicate if media uploader is needed.
- *
- * @since 1.0.0
- * @var bool
- */
-private static $needs_media_uploader = false;
+	/** @var bool Asset flags */
+	private static $needs_media = false;
+	private static $needs_color = false;
+	private static $needs_conditional = false;
 
-/**
- * Flag to indicate if color picker is needed.
- *
- * @since 1.0.0
- * @var bool
- */
-private static $needs_color_picker = false;
+	/** @var bool Debug mode */
+	private static $debug = false;
 
-/**
- * Flag to indicate if conditional JS is needed.
- *
- * @since 1.0.0
- * @var bool
- */
-private static $needs_conditional_js = false;
+	/** @var array Messages (debug/errors) */
+	private static $messages = [];
 
 	/**
 	 * Initialize the framework.
 	 *
-	 * @since 1.0.0
-	 *
 	 * @param array $config {
-	 *     Array of configuration options.
-	 *
-	 *     @type string $menu_title  Menu title.
-	 *     @type string $menu_slug   Menu slug.
-	 *     @type string $option_name Option name.
+	 *     @type string $menu_title
+	 *     @type string $menu_slug
+	 *     @type string $option_name
+	 *     @type string $capability Optional. Default 'manage_options'.
+	 *     @type bool   $debug Optional. Default WP_DEBUG constant.
 	 * }
 	 */
-	public static function init( array $config = array() ) {
-		self::$config = wp_parse_args( $config, array(
+	public static function init( array $config ) {
+		self::$config = wp_parse_args( $config, [
 			'menu_title' => 'NanoOptions',
 			'menu_slug'  => 'nano-options',
 			'option_name'=> 'nano_options',
-		) );
+			'capability' => 'manage_options',
+			'debug'      => defined( 'WP_DEBUG' ) && WP_DEBUG,
+		] );
 
-		// Include field types.
+		self::$debug = self::$config['debug'];
+
 		self::include_fields();
 
-		// Register admin menu.
-		add_action( 'admin_menu', array( __CLASS__, 'register_admin_menu' ) );
+		add_action( 'admin_menu',            [ __CLASS__, 'register_admin_menu' ] );
+		add_action( 'admin_init',            [ __CLASS__, 'register_settings' ] );
+		add_action( 'admin_enqueue_scripts', [ __CLASS__, 'enqueue_assets' ] );
+	}
 
-		// Register settings.
-		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
-
-		// Enqueue admin assets.
-		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
+	/**
+	 * Include all field files.
+	 */
+	private static function include_fields() {
+		$dir = plugin_dir_path( __FILE__ ) . 'fields/';
+		if ( is_dir( $dir ) ) {
+			foreach ( glob( $dir . '*.php' ) as $file ) {
+				require_once $file;
+			}
+		}
 	}
 
 	/**
 	 * Register a section.
 	 *
-	 * @since 1.0.0
-	 *
-	 * @param array $args {
-	 *     Array of section arguments.
-	 *
-	 *     @type string $id    Section ID.
-	 *     @type string $title Section title.
-	 * }
+	 * @param array $args
 	 */
 	public static function section( array $args ) {
-		self::$sections[] = wp_parse_args( $args, array(
-			'id'   => '',
-			'title'=> '',
-		) );
+		$defaults = [
+			'id'          => '',
+			'title'       => '',
+			'tab'         => 'Main',
+			'description' => '',
+			'callback'    => null,
+		];
+		$section = wp_parse_args( $args, $defaults );
+
+		// Duplicate ID detection
+		foreach ( self::$sections as $existing ) {
+			if ( $existing['id'] === $section['id'] ) {
+				$msg = sprintf( __( 'Duplicate section ID: %s', 'nano-options' ), $section['id'] );
+				self::$messages[] = $msg;
+				if ( self::$debug ) {
+					trigger_error( "NanoOptions: {$msg}", E_USER_NOTICE );
+				}
+				return;
+			}
+		}
+
+		self::$sections[] = $section;
+		do_action( 'nanooptions_section_added', $section );
 	}
 
 	/**
 	 * Register a field.
 	 *
-	 * @since 1.0.0
-	 *
-	 * @param array $args {
-	 *     Array of field arguments.
-	 *
-	 *     @type string $id          Field ID.
-	 *     @type string $title       Field title.
-	 *     @type string $section_id  Section ID to add field to.
-	 *     @type string $type        Field type (default: text).
-	 *     @type mixed  $default     Default value.
-	 *     @type string $description Field description.
-	 *     @type array  $attributes  HTML attributes.
-	 *     @type array  $condition   Conditional visibility rules.
-	 * }
+	 * @param array $args
 	 */
 	public static function field( array $args ) {
-		// Extract special parameters that go into field args.
-		$field_args = array();
-		if ( isset( $args['default'] ) ) {
-			$field_args['default'] = $args['default'];
-			unset( $args['default'] );
-		}
-		if ( isset( $args['description'] ) ) {
-			$field_args['description'] = $args['description'];
-			unset( $args['description'] );
-		}
-		if ( isset( $args['attributes'] ) ) {
-			$field_args['attributes'] = $args['attributes'];
-			unset( $args['attributes'] );
-		}
-		if ( isset( $args['condition'] ) ) {
-			$field_args['condition'] = $args['condition'];
-			unset( $args['condition'] );
-		}
-		
-		// Set asset flags based on field type and condition.
-		if ( ! empty( $args['type'] ) ) {
-			switch ( $args['type'] ) {
-				case 'media':
-					self::$needs_media_uploader = true;
-					break;
-				case 'color':
-					self::$needs_color_picker = true;
-					break;
-				default:
-					// Check for condition
-					if ( ! empty( $args['condition'] ) && is_array( $args['condition'] ) ) {
-						self::$needs_conditional_js = true;
-					}
-					break;
-			}
-		} else {
-			// Default type is text, check for condition.
-			if ( ! empty( $args['condition'] ) && is_array( $args['condition'] ) ) {
-				self::$needs_conditional_js = true;
-			}
-		}
-		
-		self::$fields[] = wp_parse_args( $args, array(
+		$defaults = [
 			'id'          => '',
 			'title'       => '',
 			'section_id'  => '',
 			'type'        => 'text',
-			'args'        => $field_args,
-		) );
-	}
-		if ( isset( $args['description'] ) ) {
-			$field_args['description'] = $args['description'];
-			unset( $args['description'] );
-		}
-		if ( isset( $args['attributes'] ) ) {
-			$field_args['attributes'] = $args['attributes'];
-			unset( $args['attributes'] );
-		}
-		if ( isset( $args['condition'] ) ) {
-			$field_args['condition'] = $args['condition'];
-			unset( $args['condition'] );
-		}
-		
-		self::$fields[] = wp_parse_args( $args, array(
-			'id'          => '',
-			'title'       => '',
-			'section_id'  => '',
-			'type'        => 'text',
-			'args'        => $field_args,
-		) );
-	}
+			'default'     => null,
+			'description' => '',
+			'placeholder' => '',
+			'options'     => [],
+			'sanitize'    => null,
+			'class'       => '',
+			'condition'   => null,
+			'args'        => [],
+			'integer'     => false,
+		];
+		$field = wp_parse_args( $args, $defaults );
 
-	/**
-	 * Include all field types.
-	 */
-	private static function include_fields() {
-		$fields_dir = plugin_dir_path( __FILE__ ) . 'fields';
-		if ( is_dir( $fields_dir ) ) {
-			foreach ( glob( $fields_dir . '/*.php' ) as $field_file ) {
-				require_once $field_file;
+		// Required validation
+		if ( empty( $field['id'] ) || empty( $field['title'] ) || empty( $field['section_id'] ) ) {
+			if ( self::$debug ) {
+				trigger_error( 'NanoOptions: Field missing required id, title, or section_id', E_USER_NOTICE );
+			}
+			return;
+		}
+
+		// Duplicate ID detection
+		foreach ( self::$fields as $existing ) {
+			if ( $existing['id'] === $field['id'] ) {
+				$msg = sprintf( __( 'Duplicate field ID: %s', 'nano-options' ), $field['id'] );
+				self::$messages[] = $msg;
+				if ( self::$debug ) {
+					trigger_error( "NanoOptions: {$msg}", E_USER_NOTICE );
+				}
+				return;
 			}
 		}
-	}
 
-	/**
-	 * Render a field.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param array $field Field data.
-	 * @return void
-	 */
-	private static function render_field( $field ) {
-		$field_id   = $field['id'];
-		$field_type = $field['type'];
-		$field_args = $field['args'];
-		
-		// Get current value.
-		$options = get_option( self::$config['option_name'] );
-		if ( isset( $options[ $field_id ] ) ) {
-			$value = $options[ $field_id ];
-		} else {
-			// Use default value if provided, otherwise empty string.
-			$value = isset( $field_args['default'] ) ? $field_args['default'] : '';
+		// Asset flags
+		switch ( $field['type'] ) {
+			case 'media':
+				self::$needs_media = true;
+				break;
+			case 'color':
+				self::$needs_color = true;
+				break;
+			default:
+				if ( ! empty( $field['condition'] ) ) {
+					self::$needs_conditional = true;
+				}
+				break;
 		}
-		
-		// Prepare field arguments for renderer.
-		$renderer_args = array(
-			'id'    => $field_id,
-			'name'  => self::$config['option_name'] . '[' . $field_id . ']',
-			'title' => $field['title'],
-		);
-		
-		if ( ! empty( $field_args ) && is_array( $field_args ) ) {
-			$renderer_args = array_merge( $renderer_args, $field_args );
+		if ( ! empty( $field['condition'] ) ) {
+			self::$needs_conditional = true;
 		}
-		
-		// Start conditional wrapper if needed.
-		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
-			echo '<div class="np-condition-field" data-condition="' . esc_attr( wp_json_encode( $field['condition'] ) ) . '" style="display:none;">';
-		}
-		
-		// Call the field type renderer.
-		$renderer_class = 'NanoOptions_Field_' . ucfirst( strtolower( $field_type ) );
-		if ( class_exists( $renderer_class ) && method_exists( $renderer_class, 'render' ) ) {
-			call_user_func( array( $renderer_class, 'render' ), $renderer_args, $value );
-		} else {
-			// Fallback to text field.
-			NanoOptions_Field_Text::render( $renderer_args, $value );
-		}
-		
-		// End conditional wrapper if needed.
-		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
-			echo '</div>';
-		}
+
+		self::$fields[] = $field;
+		do_action( 'nanooptions_field_added', $field );
 	}
 
 	/**
@@ -271,424 +178,426 @@ private static $needs_conditional_js = false;
 		add_options_page(
 			self::$config['menu_title'],
 			self::$config['menu_title'],
-			'manage_options',
+			self::$config['capability'],
 			self::$config['menu_slug'],
-			array( __CLASS__, 'admin_page_html' )
+			[ __CLASS__, 'admin_page_html' ]
 		);
 	}
 
 	/**
-	 * Register settings using the Settings API.
+	 * Register setting only – we render fields manually.
 	 */
 	public static function register_settings() {
-		// Register a setting.
 		register_setting(
-			self::$config['option_name'], // Option group.
-			self::$config['option_name'], // Option name.
-			array( __CLASS__, 'sanitize_options' ) // Sanitize callback.
+			self::$config['option_name'],
+			self::$config['option_name'],
+			[ __CLASS__, 'sanitize_options' ]
 		);
-
-		// Register each section.
-		foreach ( self::$sections as $section ) {
-			// Skip if ID or title is empty.
-			if ( empty( $section['id'] ) || empty( $section['title'] ) ) {
-				continue;
-			}
-
-			add_settings_section(
-				$section['id'],
-				$section['title'],
-				'__return_false', // No section description.
-				self::$config['menu_slug']
-			);
-		}
-
-		// Register each field.
-		foreach ( self::$fields as $field ) {
-			// Skip if required data is missing.
-			if ( empty( $field['id'] ) || empty( $field['title'] ) || empty( $field['section_id'] ) ) {
-				continue;
-			}
-
-			add_settings_field(
-				$field['id'],
-				$field['title'],
-				array( __CLASS__, 'render_field_callback' ),
-				self::$config['menu_slug'],
-				$field['section_id']
-			);
-		}
 	}
 
-	/**
-	 * Field rendering callback for Settings API.
-	 */
-	public static function render_field_callback( $args ) {
-		// Find the field by ID.
-		$field_id = $args['args'][0]; // The field ID is passed as first argument in $args['args']
-		
-		foreach ( self::$fields as $field ) {
-			if ( $field['id'] === $field_id ) {
-				self::render_field( $field );
-				break;
-			}
-		}
+	/* ==== Developer Helper Methods ==== */
+
+	public static function get_option_value( $id, $default = null ) {
+		$options = get_option( self::$config['option_name'], [] );
+		return isset( $options[ $id ] ) ? $options[ $id ] : $default;
 	}
 
+	public static function get_all_options() {
+		return get_option( self::$config['option_name'], [] );
+	}
+
+	public static function get_sections() {
+		return self::$sections;
+	}
+
+	public static function get_fields() {
+		return self::$fields;
+	}
+
+	/* ==== Field Rendering ==== */
+
 	/**
-	 * Sanitize options.
+	 * Render a single field row inside the table.
 	 *
-	 * @param array $input Option array.
-	 * @return array Sanitized option array.
+	 * @param array $field
 	 */
+	private static function render_field_wrapper_for_display( $field ) {
+		$field_class = 'NanoOptions_Field_' . ucfirst( strtolower( $field['type'] ) );
+		if ( ! class_exists( $field_class ) ) {
+			$field_class = 'NanoOptions_Field_Text';
+		}
+
+		$value = self::get_option_value( $field['id'], $field['default'] ?? '' );
+
+		// Merge field args into top-level for renderer convenience.
+		$render = $field;
+		if ( ! empty( $field['args'] ) && is_array( $field['args'] ) ) {
+			$render = array_merge( $field, $field['args'] );
+			unset( $render['args'] );
+		}
+
+		// Condition attribute on row
+		$condition_attr = '';
+		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
+			$condition_attr = ' data-condition="' . esc_attr( wp_json_encode( $field['condition'] ) ) . '"';
+		}
+
+		?>
+		<tr class="nanooptions-field-row <?php echo esc_attr( $field['class'] ?? '' ); ?>"<?php echo $condition_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — escaped via esc_attr above ?>>
+			<th scope="row">
+				<label for="<?php echo esc_attr( $field['id'] ); ?>">
+					<?php echo esc_html( $field['title'] ); ?>
+				</label>
+			</th>
+			<td>
+				<?php
+				call_user_func( [ $field_class, 'render' ], $render, $value );
+				if ( ! empty( $field['description'] ) ) {
+					echo '<p class="description">' . esc_html( $field['description'] ) . '</p>';
+				}
+				?>
+			</td>
+		</tr>
+		<?php
+	}
+
+		$value = self::get_option_value( $field['id'], $field['default'] ?? '' );
+
+		// Condition attribute on row
+		$condition_attr = '';
+		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
+			$condition_attr = ' data-condition="' . esc_attr( wp_json_encode( $field['condition'] ) ) . '"';
+		}
+
+		?>
+		<tr class="nanooptions-field-row <?php echo esc_attr( $field['class'] ?? '' ); ?>"<?php echo $condition_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — escaped via esc_attr above ?>>
+			<th scope="row">
+				<label for="<?php echo esc_attr( $field['id'] ); ?>">
+					<?php echo esc_html( $field['title'] ); ?>
+				</label>
+			</th>
+			<td>
+				<?php
+				call_user_func( [ $field_class, 'render' ], $field, $value );
+				if ( ! empty( $field['description'] ) ) {
+					echo '<p class="description">' . esc_html( $field['description'] ) . '</p>';
+				}
+				?>
+			</td>
+		</tr>
+		<?php
+	}
+
+	/* ==== Admin Page ==== */
+
+	public static function admin_page_html() {
+		if ( ! current_user_can( self::$config['capability'] ) ) {
+			return;
+		}
+
+		// Notices
+		if ( isset( $_GET['settings-updated'] ) ) {
+			add_settings_error( self::$config['option_name'], 'nano_options_message', __( 'Settings saved.', 'nano-options' ), 'updated' );
+		}
+		if ( self::$debug && ! empty( self::$messages ) ) {
+			foreach ( self::$messages as $msg ) {
+				add_settings_error( self::$config['option_name'], 'nano_options_debug', $msg, 'error' );
+			}
+		}
+
+		// Handlers
+		if ( isset( $_POST['nano_options_export'] ) && check_admin_referer( 'nano_options_export', 'nano_options_export_nonce' ) ) {
+			self::export_settings();
+		}
+		if ( isset( $_POST['nano_options_import'] ) && check_admin_referer( 'nano_options_import', 'nano_options_import_nonce' ) ) {
+			self::import_settings();
+		}
+
+		settings_errors( self::$config['option_name'] );
+		?>
+		<div class="wrap nanooptions-admin">
+			<h1><?php echo esc_html( self::$config['menu_title'] ); ?></h1>
+			<form method="post" action="options.php" enctype="multipart/form-data">
+				<?php
+				settings_fields( self::$config['option_name'] );
+
+				// Build tabs list
+				$tabs = [];
+				foreach ( self::$sections as $section ) {
+					$tab = $section['tab'] ?? 'Main';
+					if ( ! in_array( $tab, $tabs, true ) ) {
+						$tabs[] = $tab;
+					}
+				}
+				if ( empty( $tabs ) ) {
+					$tabs = [ 'Main' ];
+				}
+
+				$current_tab = $_GET['tab'] ?? $tabs[0];
+				if ( ! in_array( $current_tab, $tabs, true ) ) {
+					$current_tab = $tabs[0];
+				}
+
+				// Tab navigation
+				if ( count( $tabs ) > 1 ) {
+					echo '<h2 class="nav-tab-wrapper">';
+					foreach ( $tabs as $tab ) {
+						$active = ( $tab === $current_tab ) ? ' nav-tab-active' : '';
+						echo '<a href="' . esc_url( add_query_arg( 'tab', $tab ) ) . '" class="nav-tab' . $active . '">' . esc_html( $tab ) . '</a>';
+					}
+					echo '</h2>';
+				}
+
+				// Import/Export box (always above tabs)
+				?>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Import/Export Settings', 'nano-options' ); ?></th>
+						<td>
+							<p>
+								<input type="submit" name="nano_options_export" class="button button-secondary" value="<?php esc_attr_e( 'Export', 'nano-options' ); ?>" />
+								<?php wp_nonce_field( 'nano_options_export', 'nano_options_export_nonce' ); ?>
+							</p>
+							<p>
+								<input type="file" name="nano_options_import_file" id="nano_options_import_file" accept=".json" />
+								<input type="submit" name="nano_options_import" class="button button-secondary" value="<?php esc_attr_e( 'Import', 'nano-options' ); ?>" />
+								<?php wp_nonce_field( 'nano_options_import', 'nano_options_import_nonce' ); ?>
+								<p class="description"><?php esc_html_e( 'Upload a previously exported JSON file.', 'nano-options' ); ?></p>
+							</p>
+						</td>
+					</tr>
+				</table>
+				<?php
+
+				// Tab panels (each div.tab-panel)
+				foreach ( $tabs as $tab ) {
+					$style = ( $tab === $current_tab ) ? '' : ' style="display:none;"';
+					echo '<div id="tab-' . esc_attr( $tab ) . '" class="tab-panel"' . $style . '>';
+
+					// Sections within this tab
+					foreach ( self::$sections as $section ) {
+						$section_tab = $section['tab'] ?? 'Main';
+						if ( $section_tab !== $tab ) {
+							continue;
+						}
+						?>
+						<div id="section-<?php echo esc_attr( $section['id'] ); ?>" class="nanooptions-section">
+							<?php if ( ! empty( $section['title'] ) ) : ?>
+								<h2 class="nanooptions-section-title"><?php echo esc_html( $section['title'] ); ?></h2>
+							<?php endif; ?>
+							<?php if ( ! empty( $section['callback'] ) && is_callable( $section['callback'] ) ) : ?>
+								<div class="nanooptions-section-desc"><?php call_user_func( $section['callback'], $section ); ?></div>
+							<?php endif; ?>
+							<table class="form-table" role="presentation">
+								<?php
+								foreach ( self::$fields as $field ) {
+									if ( $field['section_id'] === $section['id'] ) {
+										self::render_field_wrapper_for_display( $field );
+									}
+								}
+								?>
+							</table>
+						</div>
+						<?php
+					}
+
+					echo '</div>'; // .tab-panel
+				}
+
+				submit_button();
+				?>
+			</form>
+		</div>
+		<?php
+	}
+
+	/* ==== Sanitization ==== */
+
 	public static function sanitize_options( $input ) {
 		if ( ! is_array( $input ) ) {
-			return array();
+			return [];
 		}
-		
-		$sanitized = array();
-		
-		// Only sanitize fields that we know about.
+
+		$sanitized = [];
+
+		/**
+		 * Action before sanitization loop.
+		 */
+		do_action( 'nanooptions_sanitize_before', $input, self::$config['option_name'] );
+
 		foreach ( self::$fields as $field ) {
 			$id = $field['id'];
-			
-			// If the field is not in the input, skip (the existing value will be preserved by Settings API).
-			if ( ! isset( $input[ $id ] ) ) {
+			if ( ! array_key_exists( $id, $input ) ) {
 				continue;
 			}
-			
+
 			$value = $input[ $id ];
 			$type  = $field['type'];
-			
-			switch ( $type ) {
-				case 'text':
-					$sanitized[ $id ] = sanitize_text_field( $value );
-					break;
-				case 'checkbox':
-					$sanitized[ $id ] = ! empty( $value ) ? 1 : 0;
-					break;
-				case 'color':
-					$sanitized[ $id ] = sanitize_hex_color( $value );
-					break;
-				case 'textarea':
-					$sanitized[ $id ] = sanitize_textarea_field( $value );
-					break;
-				case 'select':
-					// Whitelist allowed values.
-					$options = isset( $field['args']['options'] ) && is_array( $field['args']['options'] ) 
-						? $field['args']['options'] 
-						: array();
-					$sanitized[ $id ] = in_array( $value, $options, true ) ? $value : '';
-					break;
-				case 'media':
-					$sanitized[ $id ] = esc_url_raw( $value );
-					break;
-				default:
-					// Fallback for unknown types: treat as text.
-					$sanitized[ $id ] = sanitize_text_field( $value );
-					break;
+
+			// Custom sanitizer
+			if ( ! empty( $field['sanitize'] ) ) {
+				if ( is_callable( $field['sanitize'] ) ) {
+					$clean = call_user_func( $field['sanitize'], $value );
+				} elseif ( is_string( $field['sanitize'] ) && function_exists( $field['sanitize'] ) ) {
+					$clean = call_user_func( $field['sanitize'], $value );
+				} else {
+					$clean = self::sanitize_by_type( $value, $type, $field );
+				}
+			} else {
+				$clean = self::sanitize_by_type( $value, $type, $field );
 			}
+
+			$sanitized[ $id ] = apply_filters( "nanooptions_sanitize_{$type}", $clean, $field );
 		}
-		
+
+		/**
+		 * Action after sanitization.
+		 */
+		do_action( 'nanooptions_sanitize_after', $sanitized, self::$config['option_name'] );
+
 		return $sanitized;
 	}
 
 	/**
-	 * Admin page HTML.
+	 * Type-based sanitization.
+	 *
+	 * @param mixed  $value
+	 * @param string $type
+	 * @param array  $field
+	 * @return mixed
 	 */
-	public static function admin_page_html() {
-		// Check user capabilities.
-		if ( ! current_user_can( 'manage_options' ) ) {
+	private static function sanitize_by_type( $value, $type, $field ) {
+		switch ( $type ) {
+			case 'text':
+				return sanitize_text_field( $value );
+
+			case 'textarea':
+				return function_exists( 'sanitize_textarea_field' ) ? sanitize_textarea_field( $value ) : wp_kses_post( $value );
+
+			case 'checkbox':
+				return ! empty( $value ) ? 1 : 0;
+
+			case 'select':
+			case 'radio':
+				$allowed = $field['options'] ?? [];
+				return in_array( $value, $allowed, true ) ? $value : '';
+
+			case 'number':
+				if ( ! empty( $field['integer'] ) ) {
+					return absint( $value );
+				}
+				return floatval( $value );
+
+			case 'color':
+				return sanitize_hex_color( $value );
+
+			case 'media':
+				return esc_url_raw( $value );
+
+			case 'hidden':
+				return sanitize_text_field( $value );
+
+			default:
+				return sanitize_text_field( $value );
+		}
+	}
+
+	/* ==== Import / Export ==== */
+
+	private static function export_settings() {
+		$options = get_option( self::$config['option_name'], [] );
+		$json    = wp_json_encode( $options );
+
+		header( 'Content-Description: File Transfer' );
+		header( 'Content-Type: application/json' );
+		header( 'Content-Disposition: attachment; filename=nano-options-settings.json' );
+		header( 'Expires: 0' );
+		header( 'Cache-Control: must-revalidate' );
+		header( 'Pragma: public' );
+		echo $json;
+		exit;
+	}
+
+	private static function import_settings() {
+		if ( ! isset( $_FILES['nano_options_import_file'] ) || ! is_uploaded_file( $_FILES['nano_options_import_file']['tmp_name'] ) ) {
+			add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'No file uploaded.', 'nano-options' ), 'error' );
 			return;
 		}
 
-		// Settings saved notice.
-		if ( isset( $_GET['settings-updated'] ) ) {
-			add_settings_error( self::$config['option_name'], 'nano_options_message', __( 'Settings saved.', 'nano-options' ), 'updated' );
+		$file = $_FILES['nano_options_import_file']['tmp_name'];
+		$data = file_get_contents( $file );
+		$json = json_decode( $data, true );
+
+		if ( json_last_error() !== JSON_ERROR_NONE ) {
+			add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'Invalid JSON file.', 'nano-options' ), 'error' );
+			return;
 		}
 
-		// Show settings errors.
-		settings_errors( self::$config['option_name'] );
-		?>
-		<div class="wrap">
-			<h1><?php echo esc_html( self::$config['menu_title'] ); ?></h1>
-			<form method="post" action="options.php">
-				<?php
-				settings_fields( self::$config['option_name'] );
-				
-				// Import/Export section.
-				echo '<h2>' . esc_html__( 'Import/Export Settings', 'nano-options' ) . '</h2>';
-				echo '<table class="form-table">';
-				echo '<tr><th scope="row">' . esc_html__( 'Export Settings', 'nano-options' ) . '</th><td>';
-				echo '<input type="submit" name="nano_options_export" value="' . esc_attr__( 'Export Settings', 'nano-options' ) . '" class="button" />';
-				echo wp_nonce_field( 'nano_options_export', 'nano_options_export_nonce', false, false );
-				echo '</td></tr>';
-				echo '<tr><th scope="row">' . esc_html__( 'Import Settings', 'nano-options' ) . '</th><td>';
-				echo '<input type="file" name="nano_options_import_file" id="nano_options_import_file" />';
-				echo '<input type="submit" name="nano_options_import" value="' . esc_attr__( 'Import Settings', 'nano-options' ) . '" class="button" />';
-				echo '<p class="description">' . esc_html__( 'Upload a JSON file exported from NanoOptions to import settings.', 'nano-options' ) . '</p>';
-				echo wp_nonce_field( 'nano_options_import', 'nano_options_import_nonce', false, false );
-				echo '</td></tr>';
-				echo '</table>';
-
-				do_settings_sections( self::$config['menu_slug'] );
-				submit_button();
-				?>
-			</form>
-		</div>
-		<?php
-		// Tab switching JS.
-		if ( count( $this->get_tabs() ) > 1 ) {
-			?>
-			<script type="text/javascript">
-				jQuery(document).ready(function($){
-					$(".nav-tab-wrapper a").on("click", function(e){
-						e.preventDefault();
-						var tab = $(this).attr("href").split("tab=")[1];
-						$(".tab-panel").hide();
-						$("#tab-" + tab).show();
-						$(".nav-tab").removeClass("nav-tab-active");
-						$(this).addClass("nav-tab-active");
-					});
-				});
-			</script>
-			<?php
-		}
-	}
-
-	/**
-	 * Get tabs from sections.
-	 *
-	 * @since 1.0.0
-	 * @return array
-	 */
-	private static function get_tabs() {
-		$tabs = array();
-		foreach ( self::$sections as $section ) {
-			if ( ! empty( $section['tab'] ) && ! in_array( $section['tab'], $tabs ) ) {
-				$tabs[] = $section['tab'];
-			}
-		}
-		if ( empty( $tabs ) ) {
-			$tabs = array( 'default' );
-		}
-		return $tabs;
-	}
-
-		// Handle export action.
-		if ( isset( $_POST['nano_options_export'] ) && isset( $_POST['nano_options_export_nonce'] ) && wp_verify_nonce( $_POST['nano_options_export_nonce'], 'nano_options_export' ) ) {
-			$options = get_option( self::$config['option_name'] );
-			$json = wp_json_encode( $options );
-
-			header( 'Content-Description: File Transfer' );
-			header( 'Content-Type: application/json' );
-			header( 'Content-Disposition: attachment; filename=nano-options-settings.json' );
-			header( 'Expires: 0' );
-			header( 'Cache-Control: must-revalidate' );
-			header( 'Pragma: public' );
-			echo $json;
-			die;
-		}
-
-		// Handle import action.
-		if ( isset( $_POST['nano_options_import'] ) && isset( $_POST['nano_options_import_nonce'] ) && wp_verify_nonce( $_POST['nano_options_import_nonce'], 'nano_options_import' ) ) {
-			if ( ! isset( $_FILES['nano_options_import_file'] ) || ! is_uploaded_file( $_FILES['nano_options_import_file']['tmp_name'] ) ) {
-				add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'No file uploaded.', 'nano-options' ), 'error' );
-			} else {
-				$file = $_FILES['nano_options_import_file']['tmp_name'];
-				$data = file_get_contents( $file );
-				$json = json_decode( $data, true );
-
-				if ( json_last_error() !== JSON_ERROR_NONE ) {
-					add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'Invalid JSON file.', 'nano-options' ), 'error' );
-				} else {
-					// Validate and sanitize the imported data.
-					$imported = array();
-					foreach ( self::$fields as $field ) {
-						$id = $field['id'];
-						if ( isset( $json[ $id ] ) ) {
-							$value = $json[ $id ];
-							$type  = $field['type'];
-							switch ( $type ) {
-								case 'text':
-									$imported[ $id ] = sanitize_text_field( $value );
-									break;
-								case 'checkbox':
-									$imported[ $id ] = ! empty( $value ) ? 1 : 0;
-									break;
-								case 'color':
-									$imported[ $id ] = sanitize_hex_color( $value );
-									break;
-								case 'textarea':
-									$imported[ $id ] = sanitize_textarea_field( $value );
-									break;
-								case 'select':
-									$options = isset( $field['args']['options'] ) && is_array( $field['args']['options'] ) 
-										? $field['args']['options'] 
-										: array();
-									$imported[ $id ] = in_array( $value, $options, true ) ? $value : '';
-									break;
-								case 'media':
-									$imported[ $id ] = esc_url_raw( $value );
-									break;
-								default:
-									$imported[ $id ] = sanitize_text_field( $value );
-									break;
-							}
-						}
-					}
-
-					if ( update_option( self::$config['option_name'], $imported ) ) {
-						add_settings_error( self::$config['option_name'], 'nano_options_import_success', __( 'Settings imported successfully.', 'nano-options' ), 'updated' );
-					} else {
-						add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'Failed to import settings.', 'nano-options' ), 'error' );
-					}
-				}
+		$imported = [];
+		foreach ( self::$fields as $field ) {
+			$id = $field['id'];
+			if ( isset( $json[ $id ] ) ) {
+				$value = $json[ $id ];
+				$clean = self::sanitize_by_type( $value, $field['type'], $field );
+				$imported[ $id ] = apply_filters( "nanooptions_sanitize_{$field['type']}", $clean, $field );
 			}
 		}
 
-		// Settings saved notice.
-		if ( isset( $_GET['settings-updated'] ) ) {
-			add_settings_error( self::$config['option_name'], 'nano_options_message', __( 'Settings saved.', 'nano-options' ), 'updated' );
+		if ( empty( $imported ) ) {
+			add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'No valid fields found in import.', 'nano-options' ), 'error' );
+			return;
 		}
 
-		// Show settings errors.
-		settings_errors( self::$config['option_name'] );
-		?>
-		<div class="wrap">
-			<h1><?php echo esc_html( self::$config['menu_title'] ); ?></h1>
-			<form method="post" action="options.php">
-				<?php
-				settings_fields( self::$config['option_name'] );
-				
-				// Import/Export section.
-				echo '<h2>' . esc_html__( 'Import/Export Settings', 'nano-options' ) . '</h2>';
-				echo '<table class="form-table">';
-				echo '<tr><th scope="row">' . esc_html__( 'Export Settings', 'nano-options' ) . '</th><td>';
-				echo '<input type="submit" name="nano_options_export" value="' . esc_attr__( 'Export Settings', 'nano-options' ) . '" class="button" />';
-				echo wp_nonce_field( 'nano_options_export', 'nano_options_export_nonce', false, false );
-				echo '</td></tr>';
-				echo '<tr><th scope="row">' . esc_html__( 'Import Settings', 'nano-options' ) . '</th><td>';
-				echo '<input type="file" name="nano_options_import_file" id="nano_options_import_file" />';
-				echo '<input type="submit" name="nano_options_import" value="' . esc_attr__( 'Import Settings', 'nano-options' ) . '" class="button" />';
-				echo '<p class="description">' . esc_html__( 'Upload a JSON file exported from NanoOptions to import settings.', 'nano-options' ) . '</p>';
-				echo wp_nonce_field( 'nano_options_import', 'nano_options_import_nonce', false, false );
-				echo '</td></tr>';
-				echo '</table>';
+		$existing = get_option( self::$config['option_name'], [] );
+		$updated  = array_merge( $existing, $imported );
 
-				do_settings_sections( self::$config['menu_slug'] );
-				submit_button();
-				?>
-			</form>
-		</div>
-		<?php
-	}
-
-		// Settings saved notice.
-		if ( isset( $_GET['settings-updated'] ) ) {
-			add_settings_error( self::$config['option_name'], 'nano_options_message', __( 'Settings saved.', 'nano-options' ), 'updated' );
+		if ( update_option( self::$config['option_name'], $updated ) ) {
+			add_settings_error( self::$config['option_name'], 'nano_options_import_success', __( 'Settings imported successfully.', 'nano-options' ), 'updated' );
+		} else {
+			add_settings_error( self::$config['option_name'], 'nano_options_import_error', __( 'Failed to import settings.', 'nano-options' ), 'error' );
 		}
-
-		// Show settings errors.
-		settings_errors( self::$config['option_name'] );
-		?>
-		<div class="wrap">
-			<h1><?php echo esc_html( self::$config['menu_title'] ); ?></h1>
-			<form method="post" action="options.php">
-				<?php
-				settings_fields( self::$config['option_name'] );
-
-				// Get tabs from sections.
-				$tabs = array();
-				foreach ( self::$sections as $section ) {
-					if ( ! empty( $section['tab'] ) && ! in_array( $section['tab'], $tabs ) ) {
-						$tabs[] = $section['tab'];
-					}
-				}
-				if ( empty( $tabs ) ) {
-					$tabs = array( 'default' );
-				}
-
-				$current_tab = isset( $_GET['tab'] ) && in_array( $_GET['tab'], $tabs ) ? $_GET['tab'] : $tabs[0];
-
-				// Tab navigation.
-				echo '<h2 class="nav-tab-wrapper">';
-				foreach ( $tabs as $tab ) {
-					$current = ( $current_tab === $tab ) ? ' nav-tab-active' : '';
-					echo '<a href="' . esc_url( add_query_arg( 'tab', $tab ) ) . '" class="nav-tab' . esc_attr( $current ) . '">' . esc_html( ucfirst( $tab ) ) . '</a>';
-				}
-				echo '</h2>';
-
-				// Tab panels.
-				foreach ( $tabs as $tab ) {
-					$style = ( $current_tab === $tab ) ? '' : ' style="display:none;"';
-					echo '<div class="tab-panel" id="tab-' . esc_attr( $tab ) . '"' . $style . '>';
-
-					// Output sections for this tab.
-					foreach ( self::$sections as $section ) {
-						if ( $section['tab'] === $tab ) {
-							if ( ! empty( $section['title'] ) ) {
-								echo '<h2 class="tab-section-title">' . esc_html( $section['title'] ) . '</h2>';
-							}
-							// Output fields for this section.
-							foreach ( self::$fields as $field ) {
-								if ( $field['section_id'] === $section['id'] ) {
-									self::render_field( $field );
-								}
-							}
-						}
-					}
-
-					echo '</div>'; // end tab-panel
-				}
-
-				submit_button();
-				?>
-			</form>
-			<?php
-			// Tab switching JS.
-			if ( count( $tabs ) > 1 ) {
-				?>
-				<script type="text/javascript">
-					jQuery(document).ready(function($){
-						$(".nav-tab-wrapper a").on("click", function(e){
-							e.preventDefault();
-							var tab = $(this).attr("href").split("tab=")[1];
-							$(".tab-panel").hide();
-							$("#tab-" + tab).show();
-							$(".nav-tab").removeClass("nav-tab-active");
-							$(this).addClass("nav-tab-active");
-						});
-					});
-				</script>
-				<?php
-			}
-			?>
-		</div>
-		<?php
 	}
 
-	/**
-	 * Enqueue admin assets.
-	 */
+	/* ==== Asset Loading ==== */
+
 	public static function enqueue_assets() {
-		$plugin_url = plugins_url( '', __FILE__ );
+		$screen = get_current_screen();
+		if ( ! $screen || $screen->id !== self::$config['menu_slug'] ) {
+			return;
+		}
 
-		// Enqueue admin CSS.
+		$url = plugin_dir_url( __FILE__ );
+
 		wp_enqueue_style(
 			'nano-options-admin',
-			$plugin_url . '/framework/assets/admin.css',
-			array(),
+			$url . 'assets/admin.css',
+			[],
 			'1.0.0'
 		);
 
-		// Enqueue admin JS.
+		if ( self::$needs_media ) {
+			wp_enqueue_media();
+		}
+		if ( self::$needs_color ) {
+			wp_enqueue_style( 'wp-color-picker' );
+			wp_enqueue_script( 'wp-color-picker' );
+		}
+
 		wp_enqueue_script(
 			'nano-options-admin',
-			$plugin_url . '/framework/assets/admin.js',
-			array( 'jquery' ),
+			$url . 'assets/admin.js',
+			[ 'jquery' ],
 			'1.0.0',
 			true
 		);
+
+		wp_localize_script( 'nano-options-admin', 'nanoOptions', [
+			'needsConditional' => self::$needs_conditional,
+			'needsMedia'       => self::$needs_media,
+			'needsColor'       => self::$needs_color,
+			'strings'          => [
+				'selectMedia' => __( 'Select Media', 'nano-options' ),
+			],
+		] );
 	}
 }

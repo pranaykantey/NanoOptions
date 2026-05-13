@@ -95,6 +95,56 @@ class NanoOptions {
 	}
 
 	/**
+	 * Developer helper: get all options.
+	 *
+	 * @return array
+	 */
+	public static function get_all_options() {
+		if ( ! class_exists( 'NanoOptions_Framework' ) ) {
+			return [];
+		}
+		return NanoOptions_Framework::get_all_options();
+	}
+
+	/**
+	 * Developer helper: get a single option value.
+	 *
+	 * @param string $id
+	 * @param mixed  $default
+	 * @return mixed
+	 */
+	public static function get_option_value( $id, $default = null ) {
+		if ( ! class_exists( 'NanoOptions_Framework' ) ) {
+			return $default;
+		}
+		return NanoOptions_Framework::get_option_value( $id, $default );
+	}
+
+	/**
+	 * Developer helper: get registered sections.
+	 *
+	 * @return array
+	 */
+	public static function get_sections() {
+		if ( ! class_exists( 'NanoOptions_Framework' ) ) {
+			return [];
+		}
+		return NanoOptions_Framework::get_sections();
+	}
+
+	/**
+	 * Developer helper: get registered fields.
+	 *
+	 * @return array
+	 */
+	public static function get_fields() {
+		if ( ! class_exists( 'NanoOptions_Framework' ) ) {
+			return [];
+		}
+		return NanoOptions_Framework::get_fields();
+	}
+
+	/**
 	 * Register a section.
 	 *
 	 * @since 1.0.0
