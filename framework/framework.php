@@ -243,7 +243,7 @@ class NanoOptions_Framework {
 		}
 
 		?>
-		<tr class="nanooptions-field-row <?php echo esc_attr( $field['class'] ?? '' ); ?>"<?php echo $condition_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — escaped via esc_attr above ?>>
+		<tr class="nanooptions-field-row <?php echo esc_attr( $field['class'] ?? '' ); ?>"<?php echo $condition_attr; // escaped via esc_attr above ?>>
 			<th scope="row">
 				<label for="<?php echo esc_attr( $field['id'] ); ?>">
 					<?php echo esc_html( $field['title'] ); ?>
@@ -252,67 +252,6 @@ class NanoOptions_Framework {
 			<td>
 				<?php
 				call_user_func( [ $field_class, 'render' ], $render, $value );
-				if ( ! empty( $field['description'] ) ) {
-					echo '<p class="description">' . esc_html( $field['description'] ) . '</p>';
-				}
-				?>
-			</td>
-		</tr>
-		<?php
-	}
-
-		$value = self::get_option_value( $field['id'], $field['default'] ?? '' );
-
-		// Merge field args into top-level for renderer convenience.
-		$render = $field;
-		if ( ! empty( $field['args'] ) && is_array( $field['args'] ) ) {
-			$render = array_merge( $field, $field['args'] );
-			unset( $render['args'] );
-		}
-
-		// Condition attribute on row
-		$condition_attr = '';
-		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
-			$condition_attr = ' data-condition="' . esc_attr( wp_json_encode( $field['condition'] ) ) . '"';
-		}
-
-		?>
-		<tr class="nanooptions-field-row <?php echo esc_attr( $field['class'] ?? '' ); ?>"<?php echo $condition_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — escaped via esc_attr above ?>>
-			<th scope="row">
-				<label for="<?php echo esc_attr( $field['id'] ); ?>">
-					<?php echo esc_html( $field['title'] ); ?>
-				</label>
-			</th>
-			<td>
-				<?php
-				call_user_func( [ $field_class, 'render' ], $render, $value );
-				if ( ! empty( $field['description'] ) ) {
-					echo '<p class="description">' . esc_html( $field['description'] ) . '</p>';
-				}
-				?>
-			</td>
-		</tr>
-		<?php
-	}
-
-		$value = self::get_option_value( $field['id'], $field['default'] ?? '' );
-
-		// Condition attribute on row
-		$condition_attr = '';
-		if ( ! empty( $field['condition'] ) && is_array( $field['condition'] ) ) {
-			$condition_attr = ' data-condition="' . esc_attr( wp_json_encode( $field['condition'] ) ) . '"';
-		}
-
-		?>
-		<tr class="nanooptions-field-row <?php echo esc_attr( $field['class'] ?? '' ); ?>"<?php echo $condition_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — escaped via esc_attr above ?>>
-			<th scope="row">
-				<label for="<?php echo esc_attr( $field['id'] ); ?>">
-					<?php echo esc_html( $field['title'] ); ?>
-				</label>
-			</th>
-			<td>
-				<?php
-				call_user_func( [ $field_class, 'render' ], $field, $value );
 				if ( ! empty( $field['description'] ) ) {
 					echo '<p class="description">' . esc_html( $field['description'] ) . '</p>';
 				}
